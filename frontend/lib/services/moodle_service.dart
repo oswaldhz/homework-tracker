@@ -851,7 +851,7 @@ class MoodleService {
 
       // Retry with common repo_ids if first attempt failed
       if (uploadedItemid == null && uploadedFilename == null) {
-        final fallbackIds = ['3', '5', '2', '1', '6', '7'];
+        final fallbackIds = ['0', '3', '5', '2', '1', '6', '7'];
         for (final rid in fallbackIds) {
           if (rid == repoId) continue;
           await Logger.instance.log('UPLOAD: Retrying with fallback repo_id=$rid');
