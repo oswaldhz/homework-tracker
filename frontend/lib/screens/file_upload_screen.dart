@@ -120,6 +120,31 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                 ),
               ),
             ),
+            if (widget.task.submissionFiles.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Previously Uploaded Files',
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ...widget.task.submissionFiles.map((file) => _buildUploadedFileCard(context, file)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             
             Card(
@@ -298,6 +323,63 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildUploadedFileCard(BuildContext context, Map<String, dynamic> file) {
+    final theme = Theme.of(context);
+    final filename = file['filename'] as String? ?? 'Unknown file';
+    final size = file['size'] as int? ?? 0;
+    final uploadedAt = file['uploaded_at'] as String?;
+    final fileUrl = file['url'] as String?;
+    final fileUrlValid = fileUrl != null && fileUrl.isNotEmpty;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _getFileIcon(filename.split('.').last),
+            color: theme.colorScheme.primary,
+            size: 28,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  filename,
+                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_formatFileSize(size)}  •  ${uploadedAt != null ? _formatDate(DateTime.parse(uploadedAt)) : 'Unknown date'}',
+                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+          if (fileUrlValid)
+            IconButton(
+              icon: Icon(Icons.open_in_new, color: theme.colorScheme.primary, size: 20),
+              tooltip: 'Open file',
+              onPressed: () => launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 
   IconData _getFileIcon(String extension) {
