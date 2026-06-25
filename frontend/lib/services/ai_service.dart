@@ -66,7 +66,6 @@ class AiService {
       };
     }
 
-    // First, scrape Moodle course content if credentials are available
     List<Map<String, dynamic>> moodleResources = [];
     if (moodleUrl != null && moodleUrl.isNotEmpty) {
       try {
@@ -78,7 +77,6 @@ class AiService {
           courseName: courseName,
         );
       } catch (e) {
-        // Continue even if Moodle scraping fails
       }
     }
 
@@ -91,17 +89,10 @@ Description: $taskDescription
 Return ONLY a valid JSON object with this exact structure (no markdown, no extra text):
 
 {
-  "search_queries": [
-    "query1 for YouTube search",
-    "query2 for YouTube search",
-    "query3 for YouTube search"
-  ],
-  "youtube_videos": [
-    {
-      "video_id": "dQw4w9WgXcQ",
-      "title": "Video title",
-      "channel": "Channel name"
-    }
+  "search_topics": [
+    "topic 1 to search for",
+    "topic 2 to search for",
+    "topic 3 to search for"
   ],
   "key_concepts": [
     {
@@ -112,7 +103,7 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no extra
   "study_tips": "Practical advice to complete this task",
   "article_suggestions": [
     {
-      "title": "Article title that works as a search query",
+      "title": "Descriptive article title",
       "description": "Brief description",
       "source": "Website name"
     }
@@ -120,15 +111,10 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no extra
 }
 
 Requirements:
-- Generate 3 specific YouTube search queries in English or Spanish
-- Use Google Search to find 3-5 real YouTube video IDs about this topic. Extract actual video IDs from real search results. Do NOT make up video IDs.
+- Generate 3 search topics relevant to the task
 - 3-5 key concepts with brief explanations
 - Practical study tips
-- 2-3 article suggestions with descriptive titles that will be used for Google search
-
-CRITICAL: youtube_videos array must contain REAL video IDs. Use Google Search to find them. Each must be an 11-character YouTube video ID.
-
-Do NOT include 'url' fields in article_suggestions — they will be ignored. Focus on writing clear, searchable article titles.
+- 2-3 article suggestions with clear, descriptive titles
 
 Return ONLY the JSON object.''';
 
@@ -159,54 +145,26 @@ Return ONLY the JSON object.''';
       responseText = responseText.replaceAll(RegExp(r'^```(json)?\s*'), '').replaceAll(RegExp(r'\s*```$'), '').trim();
 
       final aiData = jsonDecode(responseText);
-      final searchQueries = List<String>.from(aiData['search_queries'] ?? []);
-
-      // 1. Collect AI-suggested YouTube videos (from Gemini's Google Search)
-      final aiSuggestedVideos = <Map<String, dynamic>>[];
-      final suggestedVideos = List<dynamic>.from(aiData['youtube_videos'] ?? []);
-      for (final v in suggestedVideos) {
-        if (v is Map) {
-          final videoId = v['video_id']?.toString() ?? '';
-          if (videoId.length == 11 && RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(videoId)) {
-            aiSuggestedVideos.add({
-              'url': 'https://www.youtube.com/watch?v=$videoId',
-              'video_id': videoId,
-              'title': v['title']?.toString() ?? 'YouTube Tutorial',
-              'channel': v['channel']?.toString() ?? '',
-            });
-          }
-        }
+      var searchTopics = List<String>.from(aiData['search_topics'] ?? []);
+      if (searchTopics.isEmpty) {
+        searchTopics = List<String>.from(aiData['search_queries'] ?? []);
       }
 
-      // 2. Search YouTube via web scraping for each query
-      final scrapedVideos = <Map<String, dynamic>>[];
-
-      for (final query in searchQueries.take(3)) {
-        final videos = await _searchYouTube(query);
-        for (final v in videos) {
-          if (!scrapedVideos.any((e) => e['video_id'] == v['video_id'])) {
-            scrapedVideos.add(v);
-          }
-        }
-      }
-
-      // 3. Merge AI-suggested + scraped, deduplicate
-      final seenIds = <String>{};
+      // 1. Search YouTube via Invidious API for each topic
       final allVideos = <Map<String, dynamic>>[];
+      final seenIds = <String>{};
 
-      for (final v in aiSuggestedVideos) {
-        if (seenIds.add(v['video_id'])) {
-          allVideos.add(v);
-        }
-      }
-      for (final v in scrapedVideos) {
-        if (seenIds.add(v['video_id'])) {
-          allVideos.add(v);
+      for (final topic in searchTopics) {
+        final videos = await _searchYouTubeInvidious(topic);
+        for (final v in videos) {
+          if (seenIds.add(v['video_id'])) {
+            allVideos.add(v);
+          }
         }
       }
 
       final validVideos = <Map<String, dynamic>>[];
-      for (final v in allVideos.take(10)) {
+      for (final v in allVideos) {
         validVideos.add({
           'title': v['title'] ?? 'YouTube Tutorial',
           'url': v['url'],
@@ -216,35 +174,46 @@ Return ONLY the JSON object.''';
         if (validVideos.length >= 5) break;
       }
 
-      // Fallback: if no videos found, generate YouTube search links
-      if (validVideos.isEmpty && searchQueries.isNotEmpty) {
-        for (final query in searchQueries) {
-          validVideos.add({
-            'title': 'Search YouTube: $query',
-            'url': 'https://www.youtube.com/results?search_query=${Uri.encodeComponent(query)}',
-            'channel': 'YouTube Search',
-            'description': 'Click to search YouTube for this topic',
-          });
-          if (validVideos.length >= 5) break;
-        }
-      }
-
-      // 4. Articles: always generate search links — never hallucinate URLs
+      // 2. Find real article URLs via DuckDuckGo search
       final articleSuggestions = List<Map<String, dynamic>>.from(aiData['article_suggestions'] ?? []);
       final articles = <Map<String, dynamic>>[];
+      final seenUrls = <String>{};
+
       for (final a in articleSuggestions) {
         final title = a['title']?.toString() ?? '';
         if (title.isEmpty) continue;
-        articles.add({
-          'title': title,
-          'url': 'https://www.google.com/search?q=${Uri.encodeComponent(title)}',
-          'description': a['description']?.toString() ?? '',
-          'source': a['source']?.toString() ?? 'Google Search',
-        });
-        if (articles.length >= 5) break;
+        final searchResults = await _searchDuckDuckGo(title);
+        final url = searchResults.isNotEmpty ? searchResults.first['url'] : null;
+        if (url != null && seenUrls.add(url)) {
+          articles.add({
+            'title': title,
+            'url': url,
+            'description': a['description']?.toString() ?? '',
+            'source': a['source']?.toString() ?? '',
+          });
+          if (articles.length >= 5) break;
+        }
       }
 
-      // Combine Moodle resources with AI-generated content
+      // 3. Also search for articles from search topics if we have room
+      if (articles.length < 3) {
+        for (final topic in searchTopics) {
+          final searchResults = await _searchDuckDuckGo(topic);
+          for (final r in searchResults) {
+            if (seenUrls.add(r['url'])) {
+              articles.add({
+                'title': r['title'],
+                'url': r['url'],
+                'description': r['description'] ?? '',
+                'source': r['source'] ?? '',
+              });
+              if (articles.length >= 5) break;
+            }
+          }
+          if (articles.length >= 5) break;
+        }
+      }
+
       final allPdfs = <Map<String, dynamic>>[...moodleResources.where((r) => r['type'] == 'pdf')];
       final allVideosCombined = <Map<String, dynamic>>[
         ...validVideos,
@@ -258,7 +227,7 @@ Return ONLY the JSON object.''';
         'books': moodleResources.where((r) => r['type'] == 'book').toList(),
         'key_concepts': List<Map<String, dynamic>>.from(aiData['key_concepts'] ?? []),
         'study_tips': aiData['study_tips'] ?? '',
-        'search_suggestions': searchQueries,
+        'search_suggestions': searchTopics,
         'ai_generated': true,
         'moodle_resources': moodleResources,
       };
@@ -287,6 +256,101 @@ Return ONLY the JSON object.''';
     }
   }
 
+  Future<List<Map<String, dynamic>>> _searchYouTubeInvidious(String query, {int maxResults = 5}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://inv.thepixora.com/api/v1/search?q=${Uri.encodeComponent(query)}&type=video'),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      );
+
+      if (response.statusCode != 200) return [];
+
+      final data = jsonDecode(response.body);
+      if (data is! List) return [];
+
+      final videos = <Map<String, dynamic>>[];
+      for (final v in data) {
+        if (v is! Map) continue;
+        if (v['type'] != 'video') continue;
+        final videoId = v['videoId']?.toString() ?? '';
+        if (videoId.isEmpty || videoId.length != 11) continue;
+        videos.add({
+          'url': 'https://www.youtube.com/watch?v=$videoId',
+          'video_id': videoId,
+          'title': v['title']?.toString() ?? 'YouTube Tutorial',
+          'channel': v['author']?.toString() ?? '',
+        });
+        if (videos.length >= maxResults) break;
+      }
+
+      return videos;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _searchDuckDuckGo(String query, {int maxResults = 3}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('https://html.duckduckgo.com/html/'),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: {'q': query},
+      );
+
+      if (response.statusCode != 200) return [];
+
+      final body = response.body;
+      final results = <Map<String, dynamic>>[];
+
+      final resultRegex = RegExp(
+        r'<a rel="nofollow" class="result__a" href="([^"]*)"[^>]*>(.*?)</a>.*?'
+        r'class="result__snippet"[^>]*>(.*?)</(?:a|td)>',
+        dotAll: true,
+      );
+
+      for (final match in resultRegex.allMatches(body)) {
+        var rawUrl = match.group(1) ?? '';
+        final title = _stripHtml(match.group(2) ?? '');
+        var snippet = _stripHtml(match.group(3) ?? '');
+
+        final uddgMatch = RegExp(r'uddg=([^&]+)').firstMatch(rawUrl);
+        if (uddgMatch != null) {
+          rawUrl = Uri.decodeComponent(uddgMatch.group(1)!);
+        }
+
+        if (rawUrl.isEmpty || !rawUrl.startsWith('http')) continue;
+
+        var host = '';
+        try {
+          host = Uri.parse(rawUrl).host;
+        } catch (_) {
+          continue;
+        }
+
+        results.add({
+          'url': rawUrl,
+          'title': title.isNotEmpty ? title : 'Article',
+          'description': snippet,
+          'source': host,
+        });
+        if (results.length >= maxResults) break;
+      }
+
+      return results;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  String _stripHtml(String html) {
+    return html.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
   Future<List<Map<String, dynamic>>> _scrapeMoodleCourseContent({
     required String moodleUrl,
     required String username,
@@ -297,86 +361,6 @@ Return ONLY the JSON object.''';
     try {
       final resources = <Map<String, dynamic>>[];
       return resources;
-    } catch (e) {
-      return [];
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> _searchYouTube(String query, {int maxResults = 5}) async {
-    try {
-      final searchUrl = 'https://www.youtube.com/results?search_query=${Uri.encodeComponent(query)}';
-      final response = await http.get(
-        Uri.parse(searchUrl),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-      );
-
-      if (response.statusCode != 200) return [];
-
-      final body = response.body;
-      final videos = <Map<String, dynamic>>[];
-      final seenIds = <String>{};
-
-      // Method 1: Try extracting from ytInitialData JSON
-      try {
-        final initDataMatch = RegExp(r'window\.ytInitialData\s*=\s*({.*?});\s*</script>', dotAll: true).firstMatch(body);
-        if (initDataMatch != null) {
-          final initData = jsonDecode(initDataMatch.group(1)!);
-          const searchPath = ['contents', 'twoColumnSearchResultsRenderer', 'primaryContents', 'sectionListRenderer', 'contents'];
-          var sectionContents = initData;
-          for (final key in searchPath) {
-            sectionContents = sectionContents?[key];
-            if (sectionContents is List) break;
-          }
-          if (sectionContents is List) {
-            for (final section in sectionContents) {
-              final contents = section?['itemSectionRenderer']?['contents'];
-              if (contents is! List) continue;
-              for (final item in contents) {
-                final videoRenderer = item?['videoRenderer'];
-                if (videoRenderer == null) continue;
-                final videoId = videoRenderer['videoId']?.toString();
-                if (videoId == null || seenIds.contains(videoId)) continue;
-                seenIds.add(videoId);
-                final titleObj = videoRenderer['title']?['runs'];
-                final title = (titleObj is List ? titleObj.map((r) => r['text']?.toString() ?? '').join() : videoRenderer['title']?['simpleText']?.toString()) ?? 'YouTube Tutorial';
-                final channel = videoRenderer['ownerText']?['runs']?.first?['text']?.toString() ?? '';
-                videos.add({
-                  'url': 'https://www.youtube.com/watch?v=$videoId',
-                  'video_id': videoId,
-                  'title': title,
-                  'channel': channel,
-                });
-                if (videos.length >= maxResults) break;
-              }
-              if (videos.length >= maxResults) break;
-            }
-          }
-        }
-      } catch (_) {}
-
-      // Method 2: Extract from HTML links
-      if (videos.isEmpty) {
-        try {
-          final linkPattern = RegExp(r'/watch\?v=([a-zA-Z0-9_-]{11})');
-          for (final match in linkPattern.allMatches(body)) {
-            final videoId = match.group(1)!;
-            if (seenIds.contains(videoId)) continue;
-            seenIds.add(videoId);
-            videos.add({
-              'url': 'https://www.youtube.com/watch?v=$videoId',
-              'video_id': videoId,
-              'title': 'YouTube Tutorial',
-              'channel': '',
-            });
-            if (videos.length >= maxResults) break;
-          }
-        } catch (_) {}
-      }
-
-      return videos;
     } catch (e) {
       return [];
     }

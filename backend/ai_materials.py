@@ -5,98 +5,100 @@ import re
 import requests
 from typing import List, Dict
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import GEMINI_KEY_PATH
 
-def search_youtube(query: str, max_results: int = 5) -> List[Dict]:
-    """Search YouTube and return real video URLs with titles"""
-    search_url = f"https://www.youtube.com/results?search_query={requests.utils.quote(query)}"
-    
+def search_youtube_invidious(query: str, max_results: int = 5) -> List[Dict]:
+    """Search YouTube via Invidious API and return real video URLs with titles"""
+    invidious_url = f"https://inv.thepixora.com/api/v1/search?q={requests.utils.quote(query)}&type=video"
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
-    
+
     try:
-        r = requests.get(search_url, headers=headers, timeout=10)
+        r = requests.get(invidious_url, headers=headers, timeout=10)
         if r.status_code != 200:
             return []
-        
-        # Extract video IDs and titles from the ytInitialData JSON blob
+
+        data = r.json()
+        if not isinstance(data, list):
+            return []
+
         videos = []
-        seen_ids = set()
-
-        # Try to extract from ytInitialData for richer metadata
-        init_data_match = re.search(r'var ytInitialData\s*=\s*(\{.+?\});\s*</script>', r.text, re.DOTALL)
-        if init_data_match:
-            try:
-                data = json.loads(init_data_match.group(1))
-                contents = (
-                    data.get('contents', {})
-                    .get('twoColumnSearchResultsRenderer', {})
-                    .get('primaryContents', {})
-                    .get('sectionListRenderer', {})
-                    .get('contents', [])
-                )
-                for section in contents:
-                    items = section.get('itemSectionRenderer', {}).get('contents', [])
-                    for item in items:
-                        vr = item.get('videoRenderer', {})
-                        vid = vr.get('videoId')
-                        if not vid or vid in seen_ids:
-                            continue
-                        title_runs = vr.get('title', {}).get('runs', [])
-                        title = ''.join(r.get('text', '') for r in title_runs) or 'YouTube Video'
-                        channel_runs = vr.get('ownerText', {}).get('runs', [])
-                        channel = ''.join(r.get('text', '') for r in channel_runs)
-                        seen_ids.add(vid)
-                        videos.append({
-                            "url": f"https://www.youtube.com/watch?v={vid}",
-                            "video_id": vid,
-                            "title": title,
-                            "channel": channel,
-                        })
-                        if len(videos) >= max_results:
-                            return videos
-            except (json.JSONDecodeError, KeyError):
-                pass
-
-        # Fallback: regex extraction without titles
-        if not videos:
-            watch_pattern = r'"watch\?v=([a-zA-Z0-9_-]{11})"'
-            matches = re.findall(watch_pattern, r.text)
-            video_id_pattern = r'"videoId":"([a-zA-Z0-9_-]{11})"'
-            matches += re.findall(video_id_pattern, r.text)
-            for vid in dict.fromkeys(matches):
-                if vid not in seen_ids:
-                    seen_ids.add(vid)
-                    videos.append({
-                        "url": f"https://www.youtube.com/watch?v={vid}",
-                        "video_id": vid,
-                        "title": f"YouTube Video",
-                        "channel": "",
-                    })
-                    if len(videos) >= max_results:
-                        break
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            if item.get('type') != 'video':
+                continue
+            vid = item.get('videoId', '')
+            if not vid or len(vid) != 11:
+                continue
+            videos.append({
+                "url": f"https://www.youtube.com/watch?v={vid}",
+                "video_id": vid,
+                "title": item.get('title', 'YouTube Video'),
+                "channel": item.get('author', ''),
+            })
+            if len(videos) >= max_results:
+                break
 
         return videos
     except Exception as e:
-        print(f"YouTube search error: {e}")
+        print(f"Invidious search error: {e}")
         return []
 
-def verify_youtube_video(url: str) -> bool:
-    """Verify a YouTube video is actually available"""
+
+def search_duckduckgo(query: str, max_results: int = 3) -> List[Dict]:
+    """Search DuckDuckGo and return real article URLs with titles"""
     try:
-        r = requests.get(url, timeout=10, allow_redirects=True,
-                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+        r = requests.post(
+            "https://html.duckduckgo.com/html/",
+            data={"q": query},
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            timeout=10,
+        )
         if r.status_code != 200:
-            return False
-        content = r.text
-        # Check for error indicators
-        if '"status":"ERROR"' in content and '"reason":"Video unavailable"' in content:
-            return False
-        return True
-    except Exception:
-        return False
+            return []
+
+        results = []
+        pattern = re.compile(
+            r'<a rel="nofollow" class="result__a" href="([^"]*)"[^>]*>(.*?)</a>.*?'
+            r'class="result__snippet"[^>]*>(.*?)</(?:a|td)>',
+            re.DOTALL,
+        )
+
+        for match in pattern.finditer(r.text):
+            raw_url = match.group(1)
+            title = re.sub(r'<[^>]*>', '', match.group(2)).strip()
+            snippet = re.sub(r'<[^>]*>', '', match.group(3)).strip()
+
+            uddg = re.search(r'uddg=([^&]+)', raw_url)
+            if uddg:
+                from urllib.parse import unquote
+                raw_url = unquote(uddg.group(1))
+
+            if not raw_url or not raw_url.startswith('http'):
+                continue
+
+            try:
+                from urllib.parse import urlparse
+                host = urlparse(raw_url).netloc
+            except Exception:
+                continue
+
+            results.append({
+                "url": raw_url,
+                "title": title if title else "Article",
+                "description": snippet,
+                "source": host,
+            })
+            if len(results) >= max_results:
+                break
+
+        return results
+    except Exception as e:
+        print(f"DuckDuckGo search error: {e}")
+        return []
 
 class GeminiMaterialFinder:
     def __init__(self):
@@ -121,76 +123,7 @@ class GeminiMaterialFinder:
         self.search_tool = genai.protos.Tool(google_search=genai.protos.Tool.GoogleSearch())
         self.available = True
 
-    def _verify_url(self, url: str) -> bool:
-        if not url or not url.startswith("http"):
-            return False
-        try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1"
-            }
-            r = requests.get(url, timeout=15, allow_redirects=True, headers=headers)
-            
-            # Check HTTP status
-            if r.status_code == 404:
-                return False
-            if r.status_code != 200:
-                return False
-            
-            # Check for common 404 indicators in the page title and content
-            content = r.text
-            content_lower = content.lower()
-            
-            # Check page title for 404 indicators
-            title_match = re.search(r'<title[^>]*>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
-            if title_match:
-                title = title_match.group(1).lower()
-                if any(indicator in title for indicator in [
-                    '404', 'not found', 'page not found', 'error 404',
-                    'page introuvable', 'seite nicht gefunden'
-                ]):
-                    return False
-            
-            # Check for 404 indicators in the first part of the page (before dynamic content)
-            first_part = content_lower[:15000]
-            if any(indicator in first_part for indicator in [
-                '<h1>404', '<h2>404', '404 not found', 'page not found',
-                'the page you requested', 'cannot be found', 'doesn\'t exist',
-                'no longer exists', 'has been removed'
-            ]):
-                return False
-            
-            # Check if page has meaningful content (not just an error page)
-            if len(content) < 1000:
-                return False
-            
-            return True
-        except requests.exceptions.Timeout:
-            return False
-        except requests.exceptions.ConnectionError:
-            return False
-        except Exception:
-            return False
 
-    def _verify_urls_parallel(self, urls: List[str]) -> List[str]:
-        unique = list(dict.fromkeys([u for u in urls if u]))
-        if not unique:
-            return []
-        valid = []
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            futures = {ex.submit(self._verify_url, u): u for u in unique}
-            for fut in as_completed(futures):
-                u = futures[fut]
-                try:
-                    if fut.result():
-                        valid.append(u)
-                except Exception:
-                    pass
-        return valid
 
     def find_materials(self, task_title: str, task_description: str, course_name: str) -> Dict:
         if not self.available:
@@ -204,8 +137,8 @@ class GeminiMaterialFinder:
                 'error': 'Gemini API key not configured'
             }
 
-        # Step 1: Use Gemini to generate search queries and educational content
-        prompt = f"""You are an educational AI assistant. Analyze this homework task and generate search queries and educational content.
+        # Step 1: Use Gemini to generate search topics and educational content
+        prompt = f"""You are an educational AI assistant. Analyze this homework task and generate search topics and educational content.
 
 Task Title: {task_title}
 Course: {course_name}
@@ -214,10 +147,10 @@ Description: {task_description}
 Return ONLY a valid JSON object with this exact structure (no markdown, no extra text):
 
 {{
-  "search_queries": [
-    "query1 for YouTube search",
-    "query2 for YouTube search",
-    "query3 for YouTube search"
+  "search_topics": [
+    "topic 1 to search for",
+    "topic 2 to search for",
+    "topic 3 to search for"
   ],
   "key_concepts": [
     {{
@@ -228,8 +161,7 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no extra
   "study_tips": "Practical advice to complete this task",
   "article_suggestions": [
     {{
-      "title": "Article title",
-      "url": "https://...",
+      "title": "Descriptive article title",
       "description": "Brief description",
       "source": "Website name"
     }}
@@ -237,11 +169,10 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no extra
 }}
 
 Requirements:
-- Generate 3 specific YouTube search queries in English or Spanish
+- Generate 3 search topics relevant to the task
 - 3-5 key concepts with brief explanations
 - Practical study tips
-- 2-3 article suggestions from educational websites (W3Schools, MDN, GeeksforGeeks, tutorialspoint, Real Python, freeCodeCamp, Khan Academy, etc.)
-- All article URLs MUST be real, existing pages from those sites
+- 2-3 article suggestions with clear, descriptive titles
 
 Return ONLY the JSON object."""
 
@@ -254,45 +185,30 @@ Return ONLY the JSON object."""
 
             data = json.loads(response_text)
 
-            # Step 2: Search YouTube using the generated queries
-            search_queries = data.get('search_queries', [])
-            if not search_queries:
-                # Fallback queries based on task
-                search_queries = [
+            # Step 2: Extract search topics (handle both key names for compatibility)
+            search_topics = data.get('search_topics', [])
+            if not search_topics:
+                search_topics = data.get('search_queries', [])
+            if not search_topics:
+                search_topics = [
                     f"{task_title} tutorial",
                     f"{task_title} {course_name}",
                     f"{task_title} explained"
                 ]
 
-            # Search YouTube for each query
+            # Step 3: Search YouTube via Invidious for each topic
             all_videos = []
-            for query in search_queries[:3]:
-                videos = search_youtube(query, max_results=3)
-                all_videos.extend(videos)
-
-            # Remove duplicates
-            unique_videos = []
             seen_ids = set()
-            for v in all_videos:
-                if v['video_id'] not in seen_ids:
-                    seen_ids.add(v['video_id'])
-                    unique_videos.append(v)
+            for topic in search_topics[:3]:
+                videos = search_youtube_invidious(topic, max_results=3)
+                for v in videos:
+                    vid = v.get('video_id', '')
+                    if vid and vid not in seen_ids:
+                        seen_ids.add(vid)
+                        all_videos.append(v)
 
-            # Verify videos are actually available
-            valid_videos = []
-            with ThreadPoolExecutor(max_workers=8) as ex:
-                futures = {ex.submit(verify_youtube_video, v['url']): v for v in unique_videos[:10]}
-                for fut in as_completed(futures):
-                    v = futures[fut]
-                    try:
-                        if fut.result():
-                            valid_videos.append(v)
-                    except Exception:
-                        pass
-
-            # Format videos for response
             videos = []
-            for v in valid_videos[:5]:
+            for v in all_videos[:5]:
                 videos.append({
                     "title": v.get("title", "YouTube Video"),
                     "url": v['url'],
@@ -300,20 +216,46 @@ Return ONLY the JSON object."""
                     "description": ""
                 })
 
-            # Step 3: Verify article URLs
+            # Step 4: Find real article URLs via DuckDuckGo
             articles_raw = data.get('article_suggestions', [])
-            article_urls = [a.get('url', '') for a in articles_raw]
-            valid_article_urls = set(self._verify_urls_parallel(article_urls))
-
             articles = []
+            seen_urls = set()
+
             for a in articles_raw:
-                if a.get('url') in valid_article_urls:
+                title = a.get('title', '')
+                if not title:
+                    continue
+                search_results = search_duckduckgo(title, max_results=1)
+                url = search_results[0]['url'] if search_results else None
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
                     articles.append({
-                        "title": a.get('title', 'Article'),
-                        "url": a.get('url'),
+                        "title": title,
+                        "url": url,
                         "description": a.get('description', ''),
-                        "source": a.get('source', '')
+                        "source": a.get('source', ''),
                     })
+                if len(articles) >= 5:
+                    break
+
+            # Fill remaining article slots with topic searches
+            if len(articles) < 3:
+                for topic in search_topics:
+                    search_results = search_duckduckgo(topic, max_results=2)
+                    for r in search_results:
+                        url = r['url']
+                        if url not in seen_urls:
+                            seen_urls.add(url)
+                            articles.append({
+                                "title": r['title'],
+                                "url": url,
+                                "description": r['description'],
+                                "source": r['source'],
+                            })
+                        if len(articles) >= 5:
+                            break
+                    if len(articles) >= 5:
+                        break
 
             key_concepts = data.get('key_concepts', [])
             if not isinstance(key_concepts, list):
@@ -327,7 +269,7 @@ Return ONLY the JSON object."""
                 'study_tips': data.get('study_tips', ''),
                 'learning_path': [],
                 'practice_questions': [],
-                'search_suggestions': search_queries,
+                'search_suggestions': search_topics,
                 'ai_generated': True
             }
 
