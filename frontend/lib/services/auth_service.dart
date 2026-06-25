@@ -62,9 +62,29 @@ class AuthService {
       final decrypted = encrypter.decrypt64(encryptedValue, iv: _iv);
       return decrypted;
     } on FormatException {
-      throw Exception('Encryption key changed — please go to Settings and log in to Moodle again to re-save your credentials.');
+      throw Exception('Encryption key changed. Please go to Settings and log in again.');
     } catch (e) {
       throw Exception('Could not read saved credentials. Please log in again: $e');
+    }
+  }
+
+  Future<bool> hasValidKey() async {
+    try {
+      await _initKey();
+      return _key != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> resetKey() async {
+    _key = null;
+    _iv = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('encryption_key');
+    final file = await _keyFile;
+    if (await file.exists()) {
+      await file.delete();
     }
   }
 }

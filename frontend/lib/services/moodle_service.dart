@@ -775,24 +775,46 @@ class MoodleService {
         await Logger.instance.log('UPLOAD: Using generated itemid: $itemid');
       }
 
-      // Extract repo_id dynamically from the page
-      String repoId = '4';
-      final repoMatch = RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
-      if (repoMatch != null) {
-        repoId = repoMatch.group(1)!;
-        await Logger.instance.log('UPLOAD: Found repo_id from regex: $repoId');
-      } else {
-        final repoInput = editDoc.querySelector('input[name="repo_id"], select[name="repo_id"]');
-        if (repoInput != null) {
-          final val = repoInput.attributes['value'];
-          if (val != null && val.isNotEmpty) {
-            repoId = val;
-            await Logger.instance.log('UPLOAD: Found repo_id from input: $repoId');
+      // Step 2: Discover upload repository from Moodle
+      await Logger.instance.log('UPLOAD: Discovering upload repository');
+
+      String repoId = '';
+      final repoListUrl = '$_baseUrl/repository/repository_ajax.php?action=repositories&env=filemanager&sesskey=$sesskey&itemid=$itemid';
+      try {
+        final repoResp = await _get(client, repoListUrl);
+        final repoData = jsonDecode(repoResp.body);
+        if (repoData is List) {
+          for (final repo in repoData) {
+            if (repo['type'] == 'upload') {
+              repoId = repo['id'].toString();
+              await Logger.instance.log('UPLOAD: Found upload repository: name=${repo['name']}, id=$repoId');
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        await Logger.instance.log('UPLOAD: Failed to discover repositories: $e');
+      }
+
+      // Fallback: extract repo_id from page or use common IDs
+      if (repoId.isEmpty) {
+        final repoMatch = RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
+        if (repoMatch != null) {
+          repoId = repoMatch.group(1)!;
+          await Logger.instance.log('UPLOAD: Fallback repo_id from regex: $repoId');
+        } else {
+          final repoInput = editDoc.querySelector('input[name="repo_id"], select[name="repo_id"]');
+          if (repoInput != null) {
+            final val = repoInput.attributes['value'];
+            if (val != null && val.isNotEmpty) {
+              repoId = val;
+              await Logger.instance.log('UPLOAD: Fallback repo_id from input: $repoId');
+            }
           }
         }
       }
 
-      // Step 2: Upload file to Moodle draft area (repository)
+      // Step 3: Upload file to Moodle draft area (repository)
       await Logger.instance.log('UPLOAD: Uploading file to draft area');
 
       final uploadUrl = '$_baseUrl/repository/repository_ajax.php';
@@ -851,7 +873,7 @@ class MoodleService {
 
       // Retry with common repo_ids if first attempt failed
       if (uploadedItemid == null && uploadedFilename == null) {
-        final fallbackIds = ['0', '3', '5', '2', '1', '6', '7'];
+        final fallbackIds = ['3', '5', '2', '1', '6', '7'];
         for (final rid in fallbackIds) {
           if (rid == repoId) continue;
           await Logger.instance.log('UPLOAD: Retrying with fallback repo_id=$rid');

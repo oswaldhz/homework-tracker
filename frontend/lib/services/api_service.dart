@@ -26,10 +26,32 @@ class ApiService extends ChangeNotifier {
   Future<bool> hasCredentials() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.containsKey('moodle_url');
+      if (!prefs.containsKey('moodle_url')) return false;
+      final cred = await DatabaseService.instance.getCredentials();
+      if (cred == null) return false;
+      try {
+        await AuthService.instance.decrypt(cred['encrypted_username']);
+        await AuthService.instance.decrypt(cred['encrypted_password']);
+        return true;
+      } catch (_) {
+        await clearCredentials();
+        return false;
+      }
     } catch (_) {
       return false;
     }
+  }
+
+  Future<void> clearCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('moodle_url');
+    await prefs.remove('username');
+    await prefs.remove('password');
+    await prefs.remove('login_type');
+    await prefs.remove('session_cookie');
+    await prefs.remove('remember_me');
+    await AuthService.instance.resetKey();
+    await DatabaseService.instance.clearAllCredentials();
   }
 
   Future<Map<String, dynamic>> login(
