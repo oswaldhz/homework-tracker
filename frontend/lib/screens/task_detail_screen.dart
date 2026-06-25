@@ -218,9 +218,9 @@ class TaskDetailScreen extends StatelessWidget {
                         builder: (context) => FileUploadScreen(task: task),
                       ),
                     );
-                    if (result == true && context.mounted) {
+                    if (context.mounted) {
                       final fresh = context.read<ApiService>().tasks.where((t) => t.id == task.id).firstOrNull;
-                      if (fresh != null) {
+                      if (fresh != null && (fresh.submissionFiles.isNotEmpty || fresh.isSubmitted || result == true)) {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(

@@ -43,8 +43,6 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
 
   Future<void> _autoSyncSubmission() async {
     if (_task.url == null) return;
-    if (_task.lastSubmissionCheck != null &&
-        DateTime.now().difference(_task.lastSubmissionCheck!).inMinutes < 5) return;
 
     setState(() => _syncing = true);
 
@@ -116,6 +114,14 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
         _uploadedFileUrl = fileUrl;
         _statusMessage = result['message'] ?? (_uploadSuccess ? 'File uploaded successfully!' : 'Upload failed');
       });
+
+      // Refresh task data so uploaded file shows immediately
+      if (_uploadSuccess) {
+        final fresh = await DatabaseService.instance.getTask(widget.task.id);
+        if (fresh != null && mounted) {
+          setState(() => _task = Task.fromJson(fresh));
+        }
+      }
     } catch (e) {
       setState(() {
         _statusMessage = 'Error: $e';
@@ -362,9 +368,8 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                               final url = _uploadedFileUrl ?? _browserUrl;
                               if (url != null) {
                                 launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                              } else {
-                                Navigator.pop(context, true);
                               }
+                              Navigator.pop(context, true);
                             },
                             icon: const Icon(Icons.visibility),
                             label: const Text('View Uploaded File'),
@@ -396,10 +401,14 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
   Widget _buildUploadedFileCard(BuildContext context, Map<String, dynamic> file) {
     final theme = Theme.of(context);
     final filename = file['filename'] as String? ?? 'Unknown file';
+    final fileType = file['type'] as String? ?? 'file';
     final size = file['size'] as int? ?? 0;
-    final uploadedAt = file['uploaded_at'] as String?;
+    final uploadedAt = file['uploaded_at'] as String? ?? file['checked_at'] as String?;
     final fileUrl = file['url'] as String?;
     final fileUrlValid = fileUrl != null && fileUrl.isNotEmpty;
+    final preview = file['preview'] as String?;
+
+    final isOnlineText = fileType == 'online_text' || filename == 'online_text_submission';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -409,40 +418,75 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
-      child: Row(
-        children: [
-          Icon(
-            _getFileIcon(filename.split('.').last),
-            color: theme.colorScheme.primary,
-            size: 28,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+      child: isOnlineText
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  filename,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Icon(Icons.text_fields, color: theme.colorScheme.primary, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Online Text Submission',
+                        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${_formatFileSize(size)}  •  ${uploadedAt != null ? _formatDate(DateTime.parse(uploadedAt)) : 'Unknown date'}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                if (preview != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      preview,
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            )
+          : Row(
+              children: [
+                Icon(
+                  _getFileIcon(filename.split('.').last),
+                  color: theme.colorScheme.primary,
+                  size: 28,
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        filename,
+                        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_formatFileSize(size)}  •  ${uploadedAt != null ? _formatDate(DateTime.parse(uploadedAt)) : 'Unknown date'}',
+                        style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+                if (fileUrlValid)
+                  IconButton(
+                    icon: Icon(Icons.open_in_new, color: theme.colorScheme.primary, size: 20),
+                    tooltip: 'Open file',
+                    onPressed: () => launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication),
+                  ),
               ],
             ),
-          ),
-          if (fileUrlValid)
-            IconButton(
-              icon: Icon(Icons.open_in_new, color: theme.colorScheme.primary, size: 20),
-              tooltip: 'Open file',
-              onPressed: () => launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication),
-            ),
-        ],
-      ),
     );
   }
 

@@ -447,22 +447,36 @@ class MoodleService {
         final activityUrl = link.attributes['href'] ?? '';
         if (activityUrl.isEmpty) continue;
 
-        // Look for submission status indicators
-        final statusEl = module.querySelector('.submissionstatustext, .feedback, .gradereport');
+        // Look for submission status indicators in the activity info area
+        final statusEl = module.querySelector(
+          '.submissionstatustext, '
+          '.submissionstatus, '
+          '.activity-submissioninfo, '
+          '.activity-info .submissionstatustext, '
+          '.activity-info .submissionstatus, '
+          '.activity-info span, '
+          '.feedback, '
+          '.gradereport, '
+          'div[class*="infostatus"] span',
+        );
         final statusText = statusEl?.text.trim().toLowerCase() ?? '';
 
-        final hasSubmitted = statusText.contains('submitted') || 
-                             statusText.contains('submitted for grading') ||
-                             statusText.contains('graded') ||
+        final hasSubmitted = statusText.contains('submitted') ||
                              statusText.contains('entregado') ||
-                             statusText.contains('calificado');
+                             statusText.contains('graded') ||
+                             statusText.contains('calificado') ||
+                             statusText.contains('for grading');
 
         if (hasSubmitted) {
           final db = await DatabaseService.instance.database;
           final existing = await db.query('tasks', where: 'url = ?', whereArgs: [activityUrl]);
           if (existing.isNotEmpty) {
             await db.update('tasks',
-              {'is_submitted': 1, 'file_uploaded': 1},
+              {
+                'is_submitted': 1,
+                'file_uploaded': 1,
+                'submission_status': statusEl!.text.trim(),
+              },
               where: 'url = ?', whereArgs: [activityUrl],
             );
           }
@@ -1104,24 +1118,56 @@ class MoodleService {
         }
       }
       
-      // Check for file list in submission
-      final fileList = verifyDoc.querySelectorAll('.filemanager-file, .fp-file, .submission-file, .submission-file-list a');
+      // Check for file list in submission (real Moodle HTML)
+      final pluginLinks = verifyDoc.querySelectorAll(
+        '.fileuploadsubmission a[href*="pluginfile.php"], '
+        '.submission-files a[href*="pluginfile.php"], '
+        'li.fileuploadsubmission a[href*="pluginfile.php"], '
+        '.submissionplugin a[href*="pluginfile.php"], '
+        'a[href*="pluginfile.php"][href*="/submission_onlinetext/"], '
+        'a[href*="pluginfile.php"][href*="/submission_file/"]',
+      );
       final List<Map<String, dynamic>> submissionFilesWithUrls = [];
-      if (fileList.isNotEmpty) {
-        hasSubmission = true;
-        submittedFileName = fileList.first.text.trim();
-        await Logger.instance.log('UPLOAD: Found file in submission: $submittedFileName');
-        for (final fileEl in fileList) {
+      for (final fileEl in pluginLinks) {
+        final fileName = fileEl.text.trim();
+        final fileUrl = fileEl.attributes['href'];
+        if (fileName.isNotEmpty && !fileName.contains('pluginfile') && !fileName.contains('..')) {
+          hasSubmission = true;
+          submissionFilesWithUrls.add({
+            'filename': fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+            'url': fileUrl != null ? _resolveUrl(fileUrl) : null,
+            'size': await File(filePath).length(),
+            'uploaded_at': DateTime.now().toIso8601String(),
+            'itemid': finalItemid,
+          });
+          if (submittedFileName == null) {
+            submittedFileName = fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+          }
+        }
+      }
+
+      // If no specific-file links found, try broader selectors
+      if (submissionFilesWithUrls.isEmpty) {
+        final broadLinks = verifyDoc.querySelectorAll('.submission_received a[href*="pluginfile.php"], .submissionplugins a[href*="pluginfile.php"], a[href*="pluginfile.php"]');
+        final seenUrls = <String>{};
+        for (final fileEl in broadLinks) {
           final fileName = fileEl.text.trim();
           final fileUrl = fileEl.attributes['href'];
-          if (fileName.isNotEmpty) {
-            submissionFilesWithUrls.add({
-              'filename': fileName,
-              'url': fileUrl != null ? _resolveUrl(fileUrl) : null,
-              'size': await File(filePath).length(),
-              'uploaded_at': DateTime.now().toIso8601String(),
-              'itemid': finalItemid,
-            });
+          if (fileName.isNotEmpty && !fileName.contains('pluginfile') && !fileName.contains('..')) {
+            final resolved = fileUrl != null ? _resolveUrl(fileUrl) : null;
+            if (resolved != null && seenUrls.add(resolved)) {
+              hasSubmission = true;
+              submissionFilesWithUrls.add({
+                'filename': fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+                'url': resolved,
+                'size': await File(filePath).length(),
+                'uploaded_at': DateTime.now().toIso8601String(),
+                'itemid': finalItemid,
+              });
+              if (submittedFileName == null) {
+                submittedFileName = fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+              }
+            }
           }
         }
       }
@@ -1234,18 +1280,69 @@ class MoodleService {
         }
       }
 
-      // Check for file list in submission
-      final fileList = assignDoc.querySelectorAll('.filemanager-file, .fp-file, .submission-file, .submission-file-list a');
-      for (final fileEl in fileList) {
+      // Check for file list in submission (real Moodle HTML)
+      final pluginLinks = assignDoc.querySelectorAll(
+        '.fileuploadsubmission a[href*="pluginfile.php"], '
+        '.submission-files a[href*="pluginfile.php"], '
+        'li.fileuploadsubmission a[href*="pluginfile.php"], '
+        '.submissionplugin a[href*="pluginfile.php"], '
+        'a[href*="pluginfile.php"][href*="/submission_onlinetext/"], '
+        'a[href*="pluginfile.php"][href*="/submission_file/"]',
+      );
+      for (final fileEl in pluginLinks) {
         final fileName = fileEl.text.trim();
         final fileUrl = fileEl.attributes['href'];
-        if (fileName.isNotEmpty) {
+        if (fileName.isNotEmpty && !fileName.contains('pluginfile') && !fileName.contains('..')) {
           submissionFiles.add({
-            'filename': fileName,
+            'filename': fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
             'url': fileUrl != null ? _resolveUrl(fileUrl) : null,
             'checked_at': DateTime.now().toIso8601String(),
           });
         }
+      }
+
+      // If no specific-file links found, try broader selectors
+      if (submissionFiles.isEmpty) {
+        final broadLinks = assignDoc.querySelectorAll('.submission_received a[href*="pluginfile.php"], .submissionplugins a[href*="pluginfile.php"], a[href*="pluginfile.php"]');
+        final seenUrls = <String>{};
+        for (final fileEl in broadLinks) {
+          final fileName = fileEl.text.trim();
+          final fileUrl = fileEl.attributes['href'];
+          if (fileName.isNotEmpty && !fileName.contains('pluginfile') && !fileName.contains('..')) {
+            final resolved = fileUrl != null ? _resolveUrl(fileUrl) : null;
+            if (resolved != null && seenUrls.add(resolved)) {
+              submissionFiles.add({
+                'filename': fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+                'url': resolved,
+                'checked_at': DateTime.now().toIso8601String(),
+              });
+            }
+          }
+        }
+      }
+
+      // Check for online text submission
+      bool hasOnlineText = false;
+      String? onlineTextContent;
+      for (final sel in ['.online_text', '.onlinetext', '.submission_onlinetext', '.no-overflow', '.singlesubmission']) {
+        final el = assignDoc.querySelector(sel);
+        if (el != null) {
+          final text = el.text.trim();
+          if (text.isNotEmpty && text.length > 20) {
+            hasOnlineText = true;
+            onlineTextContent = text;
+            break;
+          }
+        }
+      }
+      if (hasOnlineText && submissionFiles.isEmpty) {
+        hasSubmission = true;
+        submissionFiles.add({
+          'filename': 'online_text_submission',
+          'type': 'online_text',
+          'preview': onlineTextContent!.substring(0, onlineTextContent.length.clamp(0, 200)),
+          'checked_at': DateTime.now().toIso8601String(),
+        });
       }
 
       // Check quiz grade if it's a quiz
