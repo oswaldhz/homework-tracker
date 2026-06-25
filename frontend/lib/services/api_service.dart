@@ -67,14 +67,17 @@ class ApiService extends ChangeNotifier {
     try {
       final encryptedUsername = await AuthService.instance.encrypt(username);
       final encryptedPassword = await AuthService.instance.encrypt(sessionCookie ?? password);
-      final prefs = await SharedPreferences.getInstance();
-      final rememberMe = prefs.getBool('remember_me') ?? false;
+
+      // Clear old credentials before saving new ones, so we never
+      // accumulate stale rows with different encryption keys.
+      await DatabaseService.instance.clearAllCredentials();
+
       await DatabaseService.instance.saveCredentials(
         moodleUrl,
         encryptedUsername,
         encryptedPassword,
         loginType: loginType,
-        rememberMe: rememberMe,
+        rememberMe: true,
       );
 
       final result = await MoodleService.instance.scrapeAssignments(
@@ -504,6 +507,10 @@ class ApiService extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> getAllSavedCredentials() async {
     return await DatabaseService.instance.getAllSavedCredentials();
+  }
+
+  Future<Map<String, dynamic>?> getAnyCredential() async {
+    return await DatabaseService.instance.getAnyCredential();
   }
 
   Future<void> saveCredentials(

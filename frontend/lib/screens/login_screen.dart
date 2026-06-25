@@ -46,46 +46,101 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadSavedCredentials() async {
     try {
-      // Read SharedPreferences FIRST, before any database call,
-      // so form fields are populated even if the DB call fails.
-      final prefs = await SharedPreferences.getInstance();
-      final savedUrl = prefs.getString('moodle_url');
-      final savedUsername = prefs.getString('username');
-      final savedPassword = prefs.getString('password');
-      final savedLoginType = prefs.getString('login_type') ?? 'moodle';
-      final rememberMe = prefs.getBool('remember_me') ?? false;
-
-      await Logger.instance.log('LOAD_CRED: savedUrl=$savedUrl, savedUsername=$savedUsername, '
-          'savedPassword=${savedPassword != null ? 'set(${savedPassword.length})' : 'null'}'
-          ', savedLoginType=$savedLoginType, rememberMe=$rememberMe');
-
+      var savedUrl = _urlController.text;
+      var savedUsername = _usernameController.text;
+      var savedPassword = _passwordController.text;
+      var rememberMe = false;
       List<Map<String, dynamic>> savedCredentials = [];
+
+      // First: try the database (persists across sessions)
+      // SharedPreferences does NOT persist on Windows (file ends up as {}),
+      // so we must use the DB as the primary source for credentials.
       try {
         final api = context.read<ApiService>();
+
+        // Try remember_me=1 first
         savedCredentials = await api.getAllSavedCredentials();
-        await Logger.instance.log('LOAD_CRED: DB returned ${savedCredentials.length} credentials');
+        await Logger.instance.log('LOAD_CRED: DB getAllSavedCredentials returned ${savedCredentials.length}');
+
+        if (savedCredentials.isEmpty) {
+          // Fallback: any credential regardless of remember_me flag
+          final anyCred = await api.getAnyCredential();
+          if (anyCred != null) {
+            savedCredentials = [anyCred];
+            rememberMe = (anyCred['remember_me'] as int? ?? 0) == 1;
+            await Logger.instance.log('LOAD_CRED: DB getAnyCredential found one, remember_me=$rememberMe');
+          } else {
+            await Logger.instance.log('LOAD_CRED: DB has no credentials at all');
+          }
+        } else {
+          rememberMe = true;
+        }
+
+        if (savedCredentials.isNotEmpty) {
+          final cred = savedCredentials.first;
+          final dbUrl = cred['moodle_url'] as String? ?? '';
+          final dbUsername = await api.decryptUsername(cred['encrypted_username'] as String);
+          final dbPassword = await api.decryptPassword(cred['encrypted_password'] as String);
+          final dbLoginType = cred['login_type'] as String? ?? 'moodle';
+
+          _urlController.text = dbUrl;
+          _usernameController.text = dbUsername;
+          if (dbLoginType != 'office365') {
+            _passwordController.text = dbPassword;
+          }
+          savedUrl = dbUrl;
+          savedUsername = dbUsername;
+          savedPassword = dbPassword;
+        }
+
+        await Logger.instance.log('LOAD_CRED: after DB - savedUrl=$savedUrl, '
+            'savedUsername=$savedUsername, savedPasswordLen=${savedPassword.length}'
+            ', rememberMe=$rememberMe');
       } catch (dbErr) {
-        await Logger.instance.log('LOAD_CRED: DB error (non-fatal): $dbErr');
+        await Logger.instance.log('LOAD_CRED: DB error: $dbErr');
+      }
+
+      // Second: also read from SharedPreferences as a fallback
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final sfUrl = prefs.getString('moodle_url');
+        final sfUsername = prefs.getString('username');
+        final sfPassword = prefs.getString('password');
+        final sfLoginType = prefs.getString('login_type') ?? 'moodle';
+        final sfRememberMe = prefs.getBool('remember_me') ?? false;
+
+        await Logger.instance.log('LOAD_CRED: SharedPreferences - url=$sfUrl, user=$sfUsername, '
+            'password=${sfPassword != null ? 'set(${sfPassword.length})' : 'null'}'
+            ', rememberMe=$sfRememberMe');
+
+        // Only use SharedPreferences data if DB didn't provide any
+        if (savedCredentials.isEmpty) {
+          if (sfUrl != null) _urlController.text = sfUrl;
+          if (sfUsername != null) _usernameController.text = sfUsername;
+          if (sfLoginType != 'office365' && sfPassword != null) {
+            _passwordController.text = sfPassword;
+          }
+          rememberMe = sfRememberMe;
+          savedUrl = sfUrl ?? '';
+          savedUsername = sfUsername ?? '';
+          savedPassword = sfPassword ?? '';
+        }
+      } catch (prefsErr) {
+        await Logger.instance.log('LOAD_CRED: SharedPreferences error: $prefsErr');
       }
 
       bool shouldAutoLogin = false;
       setState(() {
         _savedCredentials = savedCredentials;
         _rememberMe = rememberMe;
-        if (savedUrl != null) _urlController.text = savedUrl;
-        if (savedUsername != null) _usernameController.text = savedUsername;
-        if (savedLoginType != 'office365' && savedPassword != null) {
-          _passwordController.text = savedPassword;
-        }
         _loadingSavedCredentials = false;
-        if (rememberMe && savedUrl != null && savedUsername != null && savedPassword != null && savedPassword.isNotEmpty) {
+        if (rememberMe && savedUrl.isNotEmpty && savedUsername.isNotEmpty && savedPassword.isNotEmpty) {
           shouldAutoLogin = true;
         }
       });
 
       if (shouldAutoLogin) {
         await Logger.instance.log('LOAD_CRED: shouldAutoLogin=true, navigating to dashboard');
-        // Let the widget rebuild after setState before calling handleLogin
         await Future.delayed(const Duration(milliseconds: 100));
         if (mounted) {
           await _handleLogin();
@@ -93,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
-      final checkUrl = savedUrl ?? (_savedCredentials.isNotEmpty ? _savedCredentials.first['moodle_url'] as String? : null);
+      final checkUrl = savedUrl.isNotEmpty ? savedUrl : (savedCredentials.isNotEmpty ? savedCredentials.first['moodle_url'] as String? : null);
       if (checkUrl != null && checkUrl.isNotEmpty) {
         await _detectSso(checkUrl);
       }

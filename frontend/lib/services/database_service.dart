@@ -266,6 +266,12 @@ class DatabaseService {
     );
   }
 
+  Future<Map<String, dynamic>?> getAnyCredential() async {
+    final db = await database;
+    final results = await db.query('credentials', orderBy: 'created_at DESC', limit: 1);
+    return results.isNotEmpty ? results.first : null;
+  }
+
   Future<void> deleteSavedCredential(int id) async {
     final db = await database;
     await db.delete('credentials', where: 'id = ?', whereArgs: [id]);
