@@ -802,39 +802,39 @@ class MoodleService {
       // Step 2: Discover upload repository ID from filepicker HTML
       await Logger.instance.log('UPLOAD: Discovering upload repository');
 
-      final uploadRepoIds = <String>[];
-      void tryAddUploadRepoId(String? id) {
+      final candidateRepoIds = <String>[];
+      void tryAddCandidateRepoId(String? id) {
         final cleanId = id?.trim() ?? '';
-        if (cleanId.isNotEmpty && !uploadRepoIds.contains(cleanId)) {
-          uploadRepoIds.add(cleanId);
+        if (cleanId.isNotEmpty && !candidateRepoIds.contains(cleanId)) {
+          candidateRepoIds.add(cleanId);
         }
       }
 
-      Future<void> findUploadReposInText(String source, String label) async {
+      Future<void> findRepoIdsInText(String source, String label) async {
         final patterns = [
-          RegExp(r'"id"\s*:\s*"?(\d+)"?[\s\S]{0,800}?"type"\s*:\s*"upload"'),
-          RegExp(r'"type"\s*:\s*"upload"[\s\S]{0,800}?"id"\s*:\s*"?(\d+)"?'),
-          RegExp(r"""data-repositorytype=["']upload["'][^>]*data-repositoryid=["'](\d+)["']"""),
-          RegExp(r"""data-repositoryid=["'](\d+)["'][^>]*data-repositorytype=["']upload["']"""),
+          RegExp(r'"id"\s*:\s*"?(\d+)"?'),
+          RegExp(r"""data-repositoryid=["'](\d+)["']"""),
+          RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)"""),
+          RegExp(r"""[?&]repo_id=(\d+)"""),
         ];
 
         for (final pattern in patterns) {
           for (final match in pattern.allMatches(source)) {
-            tryAddUploadRepoId(match.group(1));
-            await Logger.instance.log('UPLOAD: Found upload repo from $label: id=${match.group(1)}');
+            tryAddCandidateRepoId(match.group(1));
           }
         }
+        await Logger.instance.log('UPLOAD: Scanned repo ids from $label');
       }
 
-      await findUploadReposInText(editResp.body, 'edit page');
+      await findRepoIdsInText(editResp.body, 'edit page');
 
-      // Strategy A: fetch file picker data and find the Upload repo tab.
+      // Strategy A: fetch file picker data and collect repository ids.
       try {
         final fpUrl = '$_baseUrl/repository/repository_ajax.php'
             '?action=filepicker&sesskey=$sesskey&env=filemanager&itemid=$itemid'
             '${contextId != null ? '&ctx_id=$contextId' : ''}';
         final fpResp = await _get(client, fpUrl);
-        await findUploadReposInText(fpResp.body, 'filepicker');
+        await findRepoIdsInText(fpResp.body, 'filepicker');
       } catch (e) {
         await Logger.instance.log('UPLOAD: Filepicker fetch failed: $e');
       }
@@ -849,9 +849,9 @@ class MoodleService {
           final repos = config['repositories'] as List?;
           if (repos != null) {
             for (final r in repos) {
-              if (r is Map && r['type'] == 'upload') {
-                tryAddUploadRepoId(r['id'].toString());
-                await Logger.instance.log('UPLOAD: Found upload repo from JS config: id=${r['id']}');
+              if (r is Map && r['id'] != null) {
+                tryAddCandidateRepoId(r['id'].toString());
+                await Logger.instance.log('UPLOAD: Found repo from JS config: type=${r['type']}, id=${r['id']}');
               }
             }
           }
@@ -863,7 +863,8 @@ class MoodleService {
       // Strategy C: call repositories API with context ID.
       try {
         final repoListUrl = '$_baseUrl/repository/repository_ajax.php'
-            '?action=repositories&sesskey=$sesskey${contextId != null ? '&ctx_id=$contextId' : ''}';
+            '?action=repositories&sesskey=$sesskey&env=filemanager&itemid=$itemid'
+            '${contextId != null ? '&ctx_id=$contextId' : ''}';
         final repoResp = await _get(client, repoListUrl);
         final repoData = jsonDecode(repoResp.body);
 
@@ -874,18 +875,48 @@ class MoodleService {
                 : const [];
 
         for (final repo in repos) {
-          if (repo is Map) {
-            if (repo['type'] == 'upload') {
-              tryAddUploadRepoId(repo['id'].toString());
-              await Logger.instance.log('UPLOAD: Found upload repo from API: name=${repo['name']}, id=${repo['id']}');
-            }
+          if (repo is Map && repo['id'] != null) {
+            tryAddCandidateRepoId(repo['id'].toString());
+            await Logger.instance.log('UPLOAD: Found repo from API: type=${repo['type']}, name=${repo['name']}, id=${repo['id']}');
           }
         }
       } catch (e) {
         await Logger.instance.log('UPLOAD: Repo API failed: $e');
       }
 
-      await Logger.instance.log('UPLOAD: Upload repo_ids: $uploadRepoIds');
+      // Last-resort local discovery: validate common ids before any upload call.
+      for (var id = 0; id <= 30; id++) {
+        tryAddCandidateRepoId(id.toString());
+      }
+
+      await Logger.instance.log('UPLOAD: Candidate repo_ids: $candidateRepoIds');
+
+      Future<bool> isUploadRepo(String rid) async {
+        try {
+          final listUrl = '$_baseUrl/repository/repository_ajax.php'
+              '?action=list&repo_id=$rid&sesskey=$sesskey&env=filemanager&itemid=$itemid'
+              '${contextId != null ? '&ctx_id=$contextId' : ''}';
+          final resp = await _get(client, listUrl);
+          final data = jsonDecode(resp.body);
+          if (data is Map && data['upload'] != null) {
+            await Logger.instance.log('UPLOAD: Validated upload repository repo_id=$rid');
+            return true;
+          }
+          await Logger.instance.log('UPLOAD: repo_id=$rid is not an upload repository');
+        } catch (e) {
+          await Logger.instance.log('UPLOAD: Repo validation failed for repo_id=$rid: $e');
+        }
+        return false;
+      }
+
+      final uploadRepoIds = <String>[];
+      for (final rid in candidateRepoIds) {
+        if (await isUploadRepo(rid)) {
+          uploadRepoIds.add(rid);
+        }
+      }
+
+      await Logger.instance.log('UPLOAD: Validated upload repo_ids: $uploadRepoIds');
 
       if (uploadRepoIds.isEmpty) {
         await Logger.instance.log('UPLOAD: No upload repository found');
