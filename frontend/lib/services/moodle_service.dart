@@ -799,47 +799,21 @@ class MoodleService {
         await Logger.instance.log('UPLOAD: Using generated itemid: $itemid');
       }
 
-      // Step 2: Discover upload repository ID from filepicker HTML
+      // Step 2: Discover upload repository ID
       await Logger.instance.log('UPLOAD: Discovering upload repository');
 
-      final candidateRepoIds = <String>[];
-      void tryAddCandidateRepoId(String? id) {
+      // Priority-ordered list of repo IDs to try.
+      final uploadRepoIds = <String>[];
+
+      void tryAddRepoId(String? id) {
         final cleanId = id?.trim() ?? '';
-        if (cleanId.isNotEmpty && !candidateRepoIds.contains(cleanId)) {
-          candidateRepoIds.add(cleanId);
+        if (cleanId.isNotEmpty && !uploadRepoIds.contains(cleanId)) {
+          uploadRepoIds.add(cleanId);
         }
       }
 
-      Future<void> findRepoIdsInText(String source, String label) async {
-        final patterns = [
-          RegExp(r'"id"\s*:\s*"?(\d+)"?'),
-          RegExp(r"""data-repositoryid=["'](\d+)["']"""),
-          RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)"""),
-          RegExp(r"""[?&]repo_id=(\d+)"""),
-        ];
-
-        for (final pattern in patterns) {
-          for (final match in pattern.allMatches(source)) {
-            tryAddCandidateRepoId(match.group(1));
-          }
-        }
-        await Logger.instance.log('UPLOAD: Scanned repo ids from $label');
-      }
-
-      await findRepoIdsInText(editResp.body, 'edit page');
-
-      // Strategy A: fetch file picker data and collect repository ids.
-      try {
-        final fpUrl = '$_baseUrl/repository/repository_ajax.php'
-            '?action=filepicker&sesskey=$sesskey&env=filemanager&itemid=$itemid'
-            '${contextId != null ? '&ctx_id=$contextId' : ''}';
-        final fpResp = await _get(client, fpUrl);
-        await findRepoIdsInText(fpResp.body, 'filepicker');
-      } catch (e) {
-        await Logger.instance.log('UPLOAD: Filepicker fetch failed: $e');
-      }
-
-      // Strategy B: parse repository list from JavaScript config on edit page.
+      // Strategy A (most reliable): parse JavaScript config — has explicit type field.
+      await Logger.instance.log('UPLOAD: Strategy A: JS config');
       try {
         final initMatch = RegExp(
           r'M\.core_filepicker\.init\([^,]+,\s*(\{[\s\S]*?\})\s*\)',
@@ -848,10 +822,17 @@ class MoodleService {
           final config = jsonDecode(initMatch.group(1)!);
           final repos = config['repositories'] as List?;
           if (repos != null) {
+            // First pass: collect upload repos; second pass: collect everything else.
             for (final r in repos) {
-              if (r is Map && r['id'] != null) {
-                tryAddCandidateRepoId(r['id'].toString());
-                await Logger.instance.log('UPLOAD: Found repo from JS config: type=${r['type']}, id=${r['id']}');
+              if (r is Map && r['type'] == 'upload' && r['id'] != null) {
+                tryAddRepoId(r['id'].toString());
+                await Logger.instance.log('UPLOAD: JS config upload repo: id=${r['id']}');
+              }
+            }
+            for (final r in repos) {
+              if (r is Map && r['type'] != 'upload' && r['id'] != null) {
+                tryAddRepoId(r['id'].toString());
+                await Logger.instance.log('UPLOAD: JS config other repo: type=${r['type']}, id=${r['id']}');
               }
             }
           }
@@ -860,66 +841,83 @@ class MoodleService {
         await Logger.instance.log('UPLOAD: JS config parse failed: $e');
       }
 
-      // Strategy C: call repositories API with context ID.
+      // Strategy B: call repositories API — also has explicit type.
+      if (uploadRepoIds.isEmpty) {
+        await Logger.instance.log('UPLOAD: Strategy B: repositories API');
+        try {
+          final repoListUrl = '$_baseUrl/repository/repository_ajax.php'
+              '?action=repositories&sesskey=$sesskey&env=filemanager&itemid=$itemid'
+              '${contextId != null ? '&ctx_id=$contextId' : ''}';
+          final repoResp = await _get(client, repoListUrl);
+          final repoData = jsonDecode(repoResp.body);
+
+          final repos = repoData is List
+              ? repoData
+              : repoData is Map
+                  ? (repoData['repositories'] as List? ?? repoData['list'] as List? ?? const [])
+                  : const [];
+
+          for (final repo in repos) {
+            if (repo is Map && repo['type'] == 'upload' && repo['id'] != null) {
+              tryAddRepoId(repo['id'].toString());
+              await Logger.instance.log('UPLOAD: API upload repo: name=${repo['name']}, id=${repo['id']}');
+            }
+          }
+          for (final repo in repos) {
+            if (repo is Map && repo['type'] != 'upload' && repo['id'] != null) {
+              tryAddRepoId(repo['id'].toString());
+            }
+          }
+        } catch (e) {
+          await Logger.instance.log('UPLOAD: Repo API failed: $e');
+        }
+      }
+
+      // Strategy C: scan edit page HTML for repo IDs.
+      await Logger.instance.log('UPLOAD: Strategy C: HTML scan');
+      {
+        final patterns = [
+          RegExp(r'"id"\s*:\s*"?(\d+)"?'),
+          RegExp(r"""data-repositoryid=["'](\d+)["']"""),
+          RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)"""),
+          RegExp(r"""[?&]repo_id=(\d+)"""),
+        ];
+        for (final pattern in patterns) {
+          for (final match in pattern.allMatches(editResp.body)) {
+            tryAddRepoId(match.group(1));
+          }
+        }
+      }
+
+      // Strategy D: try the filepicker HTML too.
+      await Logger.instance.log('UPLOAD: Strategy D: filepicker HTML');
       try {
-        final repoListUrl = '$_baseUrl/repository/repository_ajax.php'
-            '?action=repositories&sesskey=$sesskey&env=filemanager&itemid=$itemid'
+        final fpUrl = '$_baseUrl/repository/repository_ajax.php'
+            '?action=filepicker&sesskey=$sesskey&env=filemanager&itemid=$itemid'
             '${contextId != null ? '&ctx_id=$contextId' : ''}';
-        final repoResp = await _get(client, repoListUrl);
-        final repoData = jsonDecode(repoResp.body);
-
-        final repos = repoData is List
-            ? repoData
-            : repoData is Map
-                ? (repoData['repositories'] as List? ?? repoData['list'] as List? ?? const [])
-                : const [];
-
-        for (final repo in repos) {
-          if (repo is Map && repo['id'] != null) {
-            tryAddCandidateRepoId(repo['id'].toString());
-            await Logger.instance.log('UPLOAD: Found repo from API: type=${repo['type']}, name=${repo['name']}, id=${repo['id']}');
+        final fpResp = await _get(client, fpUrl);
+        final fpPatterns = [
+          RegExp(r'"id"\s*:\s*"?(\d+)"?'),
+          RegExp(r"""data-repositoryid=["'](\d+)["']"""),
+        ];
+        for (final pattern in fpPatterns) {
+          for (final match in pattern.allMatches(fpResp.body)) {
+            tryAddRepoId(match.group(1));
           }
         }
       } catch (e) {
-        await Logger.instance.log('UPLOAD: Repo API failed: $e');
+        await Logger.instance.log('UPLOAD: Filepicker fetch failed: $e');
       }
 
-      // Last-resort local discovery: validate common ids before any upload call.
-      for (var id = 0; id <= 30; id++) {
-        tryAddCandidateRepoId(id.toString());
+      // Strategy E: fallback common IDs.
+      for (var id = 0; id <= 7; id++) {
+        tryAddRepoId(id.toString());
       }
 
-      await Logger.instance.log('UPLOAD: Candidate repo_ids: $candidateRepoIds');
-
-      Future<bool> isUploadRepo(String rid) async {
-        try {
-          final listUrl = '$_baseUrl/repository/repository_ajax.php'
-              '?action=list&repo_id=$rid&sesskey=$sesskey&env=filemanager&itemid=$itemid'
-              '${contextId != null ? '&ctx_id=$contextId' : ''}';
-          final resp = await _get(client, listUrl);
-          final data = jsonDecode(resp.body);
-          if (data is Map && data['upload'] != null) {
-            await Logger.instance.log('UPLOAD: Validated upload repository repo_id=$rid');
-            return true;
-          }
-          await Logger.instance.log('UPLOAD: repo_id=$rid is not an upload repository');
-        } catch (e) {
-          await Logger.instance.log('UPLOAD: Repo validation failed for repo_id=$rid: $e');
-        }
-        return false;
-      }
-
-      final uploadRepoIds = <String>[];
-      for (final rid in candidateRepoIds) {
-        if (await isUploadRepo(rid)) {
-          uploadRepoIds.add(rid);
-        }
-      }
-
-      await Logger.instance.log('UPLOAD: Validated upload repo_ids: $uploadRepoIds');
+      await Logger.instance.log('UPLOAD: Repo IDs to try: $uploadRepoIds');
 
       if (uploadRepoIds.isEmpty) {
-        await Logger.instance.log('UPLOAD: No upload repository found');
+        await Logger.instance.log('UPLOAD: No repository ID found');
         return {
           'success': false,
           'open_in_browser': true,
