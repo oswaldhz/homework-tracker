@@ -284,47 +284,58 @@ class ApiService extends ChangeNotifier {
       String? username;
       String? password;
       String? sessionCookie;
+      String? credentialError;
 
       if (cred != null) {
         moodleUrl = cred['moodle_url'] as String?;
-        username = await AuthService.instance.decrypt(cred['encrypted_username']);
-        password = await AuthService.instance.decrypt(cred['encrypted_password']);
-        final loginType = cred['login_type'] as String? ?? 'moodle';
-        sessionCookie = loginType == 'office365' ? password : null;
+        try {
+          username = await AuthService.instance.decrypt(cred['encrypted_username']);
+          password = await AuthService.instance.decrypt(cred['encrypted_password']);
+          final loginType = cred['login_type'] as String? ?? 'moodle';
+          sessionCookie = loginType == 'office365' ? password : null;
+        } catch (e) {
+          credentialError = e.toString().replaceFirst('Exception: ', '');
+        }
       }
 
-      // Run AI search and Moodle content scraping in parallel
-      final results = await Future.wait([
-        AiService.instance.findMaterials(
-          taskTitle: task['title'],
-          taskDescription: task['description'] ?? '',
-          courseName: task['course_name'] ?? '',
-          moodleUrl: moodleUrl,
-          username: username,
-          password: password,
-          sessionCookie: sessionCookie,
-        ),
-        _scrapeMoodleContent(task, moodleUrl, username, password, sessionCookie),
-      ]);
+      // Run AI search
+      final aiResult = await AiService.instance.findMaterials(
+        taskTitle: task['title'],
+        taskDescription: task['description'] ?? '',
+        courseName: task['course_name'] ?? '',
+        moodleUrl: moodleUrl,
+        username: username,
+        password: password,
+        sessionCookie: sessionCookie,
+      );
 
-      final aiResult = results[0] as Map<String, dynamic>;
-      final moodleResources = results[1] as List<Map<String, dynamic>>;
-
-      // Merge Moodle resources into AI result
-      if (moodleResources.isNotEmpty) {
-        aiResult['moodle_resources'] = moodleResources;
-        final existingPdfs = aiResult['pdfs'] as List<dynamic>? ?? [];
-        final moodlePdfs = moodleResources.where((r) => r['type'] == 'pdf').toList();
-        final existingBooks = aiResult['books'] as List<dynamic>? ?? [];
-        final moodleBooks = moodleResources.where((r) => r['type'] == 'book').toList();
-        final moodleVideos = moodleResources.where((r) => r['type'] == 'video').toList();
-
-        aiResult['pdfs'] = [...existingPdfs, ...moodlePdfs];
-        aiResult['books'] = [...existingBooks, ...moodleBooks];
-        if (moodleVideos.isNotEmpty) {
-          final existingVideos = aiResult['videos'] as List<dynamic>? ?? [];
-          aiResult['videos'] = [...existingVideos, ...moodleVideos];
+      // Run Moodle content scraping only if credentials work
+      if (credentialError == null && moodleUrl != null && username != null && password != null) {
+        try {
+          final moodleResources = await _scrapeMoodleContent(
+            task, moodleUrl, username, password, sessionCookie,
+          );
+          if (moodleResources.isNotEmpty) {
+            aiResult['moodle_resources'] = moodleResources;
+            final existingPdfs = aiResult['pdfs'] as List<dynamic>? ?? [];
+            final moodlePdfs = moodleResources.where((r) => r['type'] == 'pdf').toList();
+            final existingBooks = aiResult['books'] as List<dynamic>? ?? [];
+            final moodleBooks = moodleResources.where((r) => r['type'] == 'book').toList();
+            final moodleVideos = moodleResources.where((r) => r['type'] == 'video').toList();
+            aiResult['pdfs'] = [...existingPdfs, ...moodlePdfs];
+            aiResult['books'] = [...existingBooks, ...moodleBooks];
+            if (moodleVideos.isNotEmpty) {
+              final existingVideos = aiResult['videos'] as List<dynamic>? ?? [];
+              aiResult['videos'] = [...existingVideos, ...moodleVideos];
+            }
+          }
+        } catch (e) {
+          // Moodle scraping failed, AI result still valid
         }
+      }
+
+      if (credentialError != null) {
+        aiResult['credential_error'] = credentialError;
       }
 
       return aiResult;
@@ -371,8 +382,13 @@ class ApiService extends ChangeNotifier {
       final cred = await DatabaseService.instance.getCredentials();
       if (cred == null) return {'success': false, 'message': 'No credentials saved'};
 
-      final username = await AuthService.instance.decrypt(cred['encrypted_username']);
-      final password = await AuthService.instance.decrypt(cred['encrypted_password']);
+      String username, password;
+      try {
+        username = await AuthService.instance.decrypt(cred['encrypted_username']);
+        password = await AuthService.instance.decrypt(cred['encrypted_password']);
+      } catch (e) {
+        return {'success': false, 'open_in_browser': true, 'url': task['url'] ?? '', 'message': e.toString().replaceFirst('Exception: ', '')};
+      }
       final loginType = cred['login_type'] as String? ?? 'moodle';
       final sessionCookie = loginType == 'office365' ? password : null;
 
@@ -403,8 +419,13 @@ class ApiService extends ChangeNotifier {
       final cred = await DatabaseService.instance.getCredentials();
       if (cred == null) return {'success': false, 'message': 'No credentials saved'};
 
-      final username = await AuthService.instance.decrypt(cred['encrypted_username']);
-      final password = await AuthService.instance.decrypt(cred['encrypted_password']);
+      String username, password;
+      try {
+        username = await AuthService.instance.decrypt(cred['encrypted_username']);
+        password = await AuthService.instance.decrypt(cred['encrypted_password']);
+      } catch (e) {
+        return {'success': false, 'open_in_browser': true, 'url': task['url'] ?? '', 'message': e.toString().replaceFirst('Exception: ', '')};
+      }
       final loginType = cred['login_type'] as String? ?? 'moodle';
       final sessionCookie = loginType == 'office365' ? password : null;
 
@@ -428,8 +449,13 @@ class ApiService extends ChangeNotifier {
       final cred = await DatabaseService.instance.getCredentials();
       if (cred == null) return {'success': false, 'message': 'No credentials saved'};
 
-      final username = await AuthService.instance.decrypt(cred['encrypted_username']);
-      final password = await AuthService.instance.decrypt(cred['encrypted_password']);
+      String username, password;
+      try {
+        username = await AuthService.instance.decrypt(cred['encrypted_username']);
+        password = await AuthService.instance.decrypt(cred['encrypted_password']);
+      } catch (e) {
+        return {'success': false, 'open_in_browser': true, 'url': task['url'] ?? '', 'message': e.toString().replaceFirst('Exception: ', '')};
+      }
       final loginType = cred['login_type'] as String? ?? 'moodle';
       final sessionCookie = loginType == 'office365' ? password : null;
 
@@ -505,8 +531,14 @@ class ApiService extends ChangeNotifier {
       if (task != null && task['url'] != null && (task['url'] as String).isNotEmpty) {
         final cred = await DatabaseService.instance.getCredentials();
         if (cred != null) {
-          final username = await AuthService.instance.decrypt(cred['encrypted_username']);
-          final password = await AuthService.instance.decrypt(cred['encrypted_password']);
+          String username, password;
+          try {
+            username = await AuthService.instance.decrypt(cred['encrypted_username']);
+            password = await AuthService.instance.decrypt(cred['encrypted_password']);
+          } catch (e) {
+            debugPrint('Background sync failed: ${e.toString().replaceFirst("Exception: ", "")}');
+            return;
+          }
           final loginType = cred['login_type'] as String? ?? 'moodle';
           final sessionCookie = loginType == 'office365' ? password : null;
           

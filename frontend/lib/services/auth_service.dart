@@ -43,8 +43,17 @@ class AuthService {
 
   Future<String> decrypt(String encryptedValue) async {
     await _initKey();
+    if (encryptedValue.isEmpty) {
+      throw Exception('No credentials stored. Please log in to Moodle first.');
+    }
     final encrypter = Encrypter(AES(_key!));
-    final decrypted = encrypter.decrypt64(encryptedValue, iv: _iv);
-    return decrypted;
+    try {
+      final decrypted = encrypter.decrypt64(encryptedValue, iv: _iv);
+      return decrypted;
+    } on FormatException {
+      throw Exception('Saved credentials are corrupted. Please log in to Moodle again to reset them.');
+    } catch (e) {
+      throw Exception('Could not read saved credentials. Please log in again: $e');
+    }
   }
 }

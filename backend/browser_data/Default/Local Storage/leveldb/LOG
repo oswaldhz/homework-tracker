@@ -1,0 +1,16 @@
+2026/06/22-01:46:07.074 2b18 Reusing MANIFEST C:\Users\oswal\Desktop\homework-tracker\backend\browser_data\Default\Local Storage\leveldb/MANIFEST-000001
+2026/06/22-01:46:07.077 2b18 Recovering log #217
+2026/06/22-01:46:07.078 2b18 Level-0 table #219: started
+2026/06/22-01:46:07.081 2b18 Level-0 table #219: 24143 bytes OK
+2026/06/22-01:46:07.081 2b18 Recovering log #218
+2026/06/22-01:46:07.081 2b18 Reusing old log C:\Users\oswal\Desktop\homework-tracker\backend\browser_data\Default\Local Storage\leveldb/000218.log 
+2026/06/22-01:46:07.082 2b18 Delete type=0 #217
+2026/06/22-01:46:07.083 38e8 Compacting 4@0 + 1@1 files
+2026/06/22-01:46:07.087 38e8 Generated table #220@0: 79 keys, 23396 bytes
+2026/06/22-01:46:07.087 38e8 Compacted 4@0 + 1@1 files => 23396 bytes
+2026/06/22-01:46:07.088 38e8 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/06/22-01:46:07.088 38e8 Delete type=2 #208
+2026/06/22-01:46:07.088 38e8 Delete type=2 #210
+2026/06/22-01:46:07.088 38e8 Delete type=2 #213
+2026/06/22-01:46:07.088 38e8 Delete type=2 #216
+2026/06/22-01:46:07.088 38e8 Delete type=2 #219

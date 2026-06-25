@@ -139,12 +139,37 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
     final videos = List<Map<String, dynamic>>.from(_materials!['videos'] ?? []);
     final articles = List<Map<String, dynamic>>.from(_materials!['articles'] ?? []);
     final isAiGenerated = _materials!['ai_generated'] ?? false;
+    final credentialError = _materials!['credential_error'] as String?;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (credentialError != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.shade300),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      credentialError,
+                      style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (isAiGenerated) ...[
             Container(
               width: double.infinity,
