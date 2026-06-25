@@ -754,7 +754,6 @@ class MoodleService {
         }
       }
 
-      // Also check for itemid in the repository call context
       if (itemid == null) {
         final itemidMatch = RegExp(r"""itemid["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
         if (itemidMatch != null) {
@@ -763,110 +762,123 @@ class MoodleService {
         }
       }
 
-      // Fallback: try to get itemid from the draft file area
+      if (itemid == null) {
+        final inputMatch = RegExp(r'<input[^>]*name="itemid"[^>]*value="(\d+)"').firstMatch(editResp.body);
+        if (inputMatch != null) {
+          itemid = int.tryParse(inputMatch.group(1)!);
+          await Logger.instance.log('UPLOAD: Found itemid from input: $itemid');
+        }
+      }
+
       if (itemid == null) {
         itemid = DateTime.now().millisecondsSinceEpoch ~/ 1000;
         await Logger.instance.log('UPLOAD: Using generated itemid: $itemid');
+      }
+
+      // Extract repo_id dynamically from the page
+      String repoId = '4';
+      final repoMatch = RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
+      if (repoMatch != null) {
+        repoId = repoMatch.group(1)!;
+        await Logger.instance.log('UPLOAD: Found repo_id from regex: $repoId');
+      } else {
+        final repoInput = editDoc.querySelector('input[name="repo_id"], select[name="repo_id"]');
+        if (repoInput != null) {
+          final val = repoInput.attributes['value'];
+          if (val != null && val.isNotEmpty) {
+            repoId = val;
+            await Logger.instance.log('UPLOAD: Found repo_id from input: $repoId');
+          }
+        }
       }
 
       // Step 2: Upload file to Moodle draft area (repository)
       await Logger.instance.log('UPLOAD: Uploading file to draft area');
       final file = await http.MultipartFile.fromPath('repo_upload_file', filePath);
 
-      // Build the upload URL with action as query param AND POST field for compatibility
       final uploadUrl = '$_baseUrl/repository/repository_ajax.php';
-      final uploadRequest = http.MultipartRequest('POST', Uri.parse(uploadUrl))
-        ..headers.addAll({..._headers(), 'Accept': 'application/json, text/plain, */*'})
-        ..fields['action'] = 'upload'
-        ..fields['sesskey'] = sesskey
-        ..fields['repo_id'] = '4'
-        ..fields['env'] = 'filemanager'
-        ..fields['itemid'] = itemid.toString()
-        ..fields['author'] = username
-        ..files.add(file);
 
-      await Logger.instance.log('UPLOAD: Sending request to $uploadUrl with fields: action=upload, sesskey=$sesskey, repo_id=4, env=filemanager, itemid=$itemid');
+      Future<Map<String, dynamic>> _tryUpload(String rid) async {
+        final uploadRequest = http.MultipartRequest('POST', Uri.parse(uploadUrl))
+          ..headers.addAll({..._headers(), 'Accept': 'application/json, text/plain, */*'})
+          ..fields['action'] = 'upload'
+          ..fields['sesskey'] = sesskey
+          ..fields['repo_id'] = rid
+          ..fields['env'] = 'filemanager'
+          ..fields['itemid'] = itemid.toString()
+          ..fields['author'] = username
+          ..files.add(file);
 
-      final uploadStream = await client.send(uploadRequest).timeout(const Duration(seconds: 60));
-      final uploadResp = await http.Response.fromStream(uploadStream);
-      _parseCookies(uploadResp);
-      
-      final respBody = uploadResp.body;
-      await Logger.instance.log('UPLOAD: Draft upload response status: ${uploadResp.statusCode}');
-      await Logger.instance.log('UPLOAD: Draft upload response length: ${respBody.length}');
-      await Logger.instance.log('UPLOAD: Draft upload response first 500 chars: ${respBody.substring(0, respBody.length.clamp(0, 500))}');
+        await Logger.instance.log('UPLOAD: Trying repo_id=$rid');
+        final stream = await client.send(uploadRequest).timeout(const Duration(seconds: 60));
+        final resp = await http.Response.fromStream(stream);
+        _parseCookies(resp);
+        final body = resp.body;
 
-      // Parse upload response to get the file info (including updated itemid)
-      int? uploadedItemid;
-      String? uploadedFilename;
+        await Logger.instance.log('UPLOAD: response status=${resp.statusCode}, length=${body.length}');
 
-      // Try to parse as JSON first
-      try {
-        final uploadData = jsonDecode(respBody);
-        if (uploadData is List && uploadData.isNotEmpty) {
-          final firstFile = uploadData[0];
-          uploadedItemid = firstFile['itemid'] as int?;
-          uploadedFilename = firstFile['filename'] as String?;
-          await Logger.instance.log('UPLOAD: Parsed from list - itemid: $uploadedItemid, filename: $uploadedFilename');
-        } else if (uploadData is Map) {
-          uploadedItemid = uploadData['itemid'] as int?;
-          uploadedFilename = uploadData['filename'] as String?;
-          await Logger.instance.log('UPLOAD: Parsed from map - itemid: $uploadedItemid, filename: $uploadedFilename');
-        }
-      } catch (e) {
-        await Logger.instance.log('UPLOAD: JSON parse failed: $e');
-        // Try to extract file info from HTML response (Moodle sometimes returns HTML error)
-        if (respBody.contains('error') || respBody.contains('Error') || respBody.contains('not logged in') || respBody.contains('invalid')) {
-          await Logger.instance.log('UPLOAD: Detected error in response body');
-          return {
-            'success': false,
-            'open_in_browser': true,
-            'url': taskUrl,
-            'message': 'Upload to Moodle failed. The file may be too large or the session expired. Try uploading directly in your browser.',
-            'debug': respBody.substring(0, respBody.length.clamp(0, 300)),
-          };
-        }
-
-        // Try alternative upload approach: POST with query-string action parameter
-        await Logger.instance.log('UPLOAD: Trying alternative upload method with repo_upload_file parameter');
         try {
-          final altUploadResp = await client.post(
-            Uri.parse('$_baseUrl/repository/repository_ajax.php?action=upload'),
-            headers: {
-              ..._headers(),
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Accept': 'application/json',
-            },
-            body: {
-              'sesskey': sesskey,
-              'repo_id': '4',
-              'env': 'filemanager',
-              'itemid': itemid.toString(),
-              'author': username,
-            },
-          ).timeout(const Duration(seconds: 30));
-          
-          await Logger.instance.log('UPLOAD: Alternative upload response: ${altUploadResp.statusCode} - ${altUploadResp.body.substring(0, altUploadResp.body.length.clamp(0, 300))}');
-        } catch (altErr) {
-          await Logger.instance.log('UPLOAD: Alternative upload also failed: $altErr');
+          final data = jsonDecode(body);
+          if (data is List && data.isNotEmpty) {
+            return {
+              'itemid': data[0]['itemid'] as int? ?? itemid,
+              'filename': data[0]['filename'] as String?,
+            };
+          } else if (data is Map && (data['itemid'] != null || data['filename'] != null)) {
+            return {
+              'itemid': data['itemid'] as int? ?? itemid,
+              'filename': data['filename'] as String?,
+            };
+          }
+        } catch (_) {}
+
+        // Check for errors in response
+        if (body.contains('error') || body.contains('Error') || body.contains('not logged in') || body.contains('invalid')) {
+          await Logger.instance.log('UPLOAD: Error in response for repo_id=$rid');
+          return {'error': body.substring(0, body.length.clamp(0, 200))};
         }
 
+        if (resp.statusCode != 200) {
+          return {'error': 'HTTP ${resp.statusCode}'};
+        }
+
+        return {};
+      }
+
+      final uploadResult = await _tryUpload(repoId);
+      int? uploadedItemid = uploadResult['itemid'] as int?;
+      String? uploadedFilename = uploadResult['filename'] as String?;
+
+      // Retry with common repo_ids if first attempt failed
+      if (uploadedItemid == null && uploadedFilename == null) {
+        final fallbackIds = ['3', '5', '2', '1', '6', '7'];
+        for (final rid in fallbackIds) {
+          if (rid == repoId) continue;
+          await Logger.instance.log('UPLOAD: Retrying with fallback repo_id=$rid');
+          final altResult = await _tryUpload(rid);
+          uploadedItemid = altResult['itemid'] as int?;
+          uploadedFilename = altResult['filename'] as String?;
+          if (uploadedItemid != null || uploadedFilename != null) {
+            repoId = rid;
+            break;
+          }
+        }
+      }
+
+      if (uploadedItemid == null && uploadedFilename == null) {
+        final errMsg = uploadResult['error'] as String?;
+        await Logger.instance.log('UPLOAD: All repo_ids failed. Last error: $errMsg');
         return {
           'success': false,
           'open_in_browser': true,
           'url': taskUrl,
-          'message': 'File upload to draft area failed. Please try in your browser.',
-          'debug': respBody.substring(0, respBody.length.clamp(0, 300)),
+          'message': 'File upload to draft area failed${errMsg != null ? ': $errMsg' : ''}. Please try in your browser.',
+          'debug': errMsg ?? '',
         };
       }
 
-      if (uploadedItemid == null && uploadedFilename == null) {
-        await Logger.instance.log('UPLOAD: Draft upload failed - no itemid or filename returned');
-        return {'success': false, 'open_in_browser': true, 'url': taskUrl, 'message': 'File upload to draft area failed. Please try in your browser.'};
-      }
-
       final finalItemid = uploadedItemid ?? itemid;
-      await Logger.instance.log('UPLOAD: Using final itemid: $finalItemid');
+      await Logger.instance.log('UPLOAD: Using final itemid: $finalItemid, repo_id=$repoId');
 
       // Step 3: Submit the assignment with the uploaded file reference
       await Logger.instance.log('UPLOAD: Submitting assignment with savesubmission');
