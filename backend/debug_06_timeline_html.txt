@@ -1,0 +1,533 @@
+
+    <div class="p-0 px-2">
+        <div class="d-flex flex-wrap gap-1 g-0">
+            <div>
+                <div data-region="day-filter" class="dropdown mb-1">
+                    <button type="button" class="btn btn-outline-secondary dropdown-toggle icon-no-margin" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="Filtrar línea de tiempo por fecha" aria-controls="menudayfilter" title="Filtrar línea de tiempo por fecha" aria-describedby="timeline-day-filter-current-selection">
+                        <span id="timeline-day-filter-current-selection" data-active-item-text="">
+                            
+                            
+                             Próximos 7 días 
+                            
+                            
+                            
+                        </span>
+                    </button>
+                    <div id="menudayfilter" role="menu" class="dropdown-menu" data-show-active-item="" data-skip-active-class="true">
+                        <a class="dropdown-item" href="#" data-from="-14" data-filtername="all" aria-label="Todos opción de filtro" role="menuitem">
+                            Todos
+                        </a>
+                        <a class="dropdown-item" href="#" data-from="-14" data-to="1" data-filtername="overdue" aria-label="Atrasados opción de filtro" role="menuitem">
+                            Atrasados
+                        </a>
+                        <div class="dropdown-divider" role="separator"></div>
+                        <h6 class="dropdown-header">Fecha de vencimiento</h6>
+                        <a class="dropdown-item dropdown-item-active" href="#" data-from="0" data-to="7" data-filtername="next7days" aria-current="true" aria-label="Próximos 7 días opción de filtro" role="menuitem">
+                            Próximos 7 días
+                        </a>
+                        <a class="dropdown-item" href="#" data-from="0" data-to="30" data-filtername="next30days" aria-label="Próximos 30 días opción de filtro" role="menuitem">
+                            Próximos 30 días
+                        </a>
+                        <a class="dropdown-item" href="#" data-from="0" data-to="90" data-filtername="next3months" aria-label="Próximos 3 meses opción de filtro" role="menuitem">
+                            Próximos 3 meses
+                        </a>
+                        <a class="dropdown-item" href="#" data-from="0" data-to="180" data-filtername="next6months" aria-label="Próximos 6 meses opción de filtro" role="menuitem">
+                            Próximos 6 meses
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div data-region="view-selector" class="btn-group mb-1">
+                    <button type="button" class="btn btn-outline-secondary dropdown-toggle icon-no-margin" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="Ordenar ítems en línea del tiempo" aria-controls="menusortby" title="Ordenar ítems en línea del tiempo" aria-describedby="timeline-view-selector-current-selection">
+                        <span id="timeline-view-selector-current-selection" data-active-item-text="">
+                            
+                            Ordenar por fecha
+                        </span>
+                    </button>
+                    <div id="menusortby" role="tablist" class="dropdown-menu dropdown-menu-end list-group hidden" data-show-active-item="">
+                        <a class="dropdown-item active dropdown-item-active" href="#view_dates_6a38743cc5ad16a38743cb855d2-1" data-bs-toggle="tab" data-filtername="sortbydates" aria-current="true" aria-label="Opción de ordenamiento Ordenar por fecha" aria-controls="view_dates_6a38743cc5ad16a38743cb855d2-1" role="tab" aria-selected="true">
+                            Ordenar por fecha
+                        </a>
+                        <a class="dropdown-item " href="#view_courses_6a38743cc5ad16a38743cb855d2-1" data-bs-toggle="tab" data-filtername="sortbycourses" aria-label="Opción de ordenamiento Ordenar por curso" aria-controls="view_courses_6a38743cc5ad16a38743cb855d2-1" role="tab" aria-selected="false" tabindex="-1">
+                            Ordenar por curso
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-grow-1 d-flex justify-content-end nav-search">
+                <div class="w-100">
+                                    <div id="searchform-auto-6a38743cc5ad16a38743cb855d2" class="d-flex flex-wrap align-items-center simplesearchform">
+                    <div class="input-group searchbar w-100" role="search">
+                        <label for="searchinput-6a38743cc5ad16a38743cb855d2">
+                            <span class="visually-hidden">Buscar por tipo o nombre de actividad</span>
+                        </label>
+                        <input type="text" data-region="input" data-action="search" id="searchinput-6a38743cc5ad16a38743cb855d2" class="form-control withclear rounded" placeholder="Buscar por tipo o nombre de actividad" name="search" value="" autocomplete="off" style="">
+                        <button class="btn btn-clear d-none" data-action="clearsearch" type="button">
+                           <i class="icon fa fa-xmark fa-fw " aria-hidden="true"></i>
+                            <span class="visually-hidden">Limpiar datos de búsqueda</span>
+                        </button>
+                    </div>
+                </div>
+</div>
+            </div>
+        </div>
+        <div class="pb-3 px-2 border-bottom"></div>
+    </div>
+    <div class="p-0">
+        <div data-region="timeline-view">
+            <div class="tab-content">
+                <div class="tab-pane active show fade" data-limit="5" data-region="view-dates" id="view_dates_6a38743cc5ad16a38743cb855d2-1" data-seen="true" role="tabpanel">
+                    <div data-region="timeline-view-dates">
+                        <div data-region="event-list-container" data-days-offset="0" data-days-limit="7" data-course-id="" data-midnight="1782014400" data-lazyload-offset="67900">
+                                <div data-region="event-list-loading-placeholder" class="hidden">
+                                    <ul class="ps-0 list-group list-group-flush">
+                                        <li class="list-group-item px-2">
+                                            <div class="row">
+                                                <div class="col-8 pe-0">
+                                                    <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                        <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                        <div style="flex: 1" class="ps-2">
+                                                            <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                            <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-4 pe-3">
+                                                    <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                        <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </li>
+                                        <li class="list-group-item px-2">
+                                            <div class="row">
+                                                <div class="col-8 pe-0">
+                                                    <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                        <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                        <div style="flex: 1" class="ps-2">
+                                                            <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                            <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-4 pe-3">
+                                                    <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                        <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </li>
+                                        <li class="list-group-item px-2">
+                                            <div class="row">
+                                                <div class="col-8 pe-0">
+                                                    <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                        <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                        <div style="flex: 1" class="ps-2">
+                                                            <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                            <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-4 pe-3">
+                                                    <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                        <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </li>
+                                        <li class="list-group-item px-2">
+                                            <div class="row">
+                                                <div class="col-8 pe-0">
+                                                    <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                        <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                        <div style="flex: 1" class="ps-2">
+                                                            <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                            <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-4 pe-3">
+                                                    <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                        <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </li>
+                                        <li class="list-group-item px-2">
+                                            <div class="row">
+                                                <div class="col-8 pe-0">
+                                                    <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                        <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                        <div style="flex: 1" class="ps-2">
+                                                            <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                            <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-4 pe-3">
+                                                    <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                        <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    </ul>
+                                    <div class="pt-3 pb-2 d-flex justify-content-between">
+                                        <div class="w-25 bg-pulse-grey" style="height: 35px"></div>
+                                    </div>
+                                </div>
+                            <div data-region="event-list-content"><div class="pb-2" data-region="event-list-wrapper">
+        <div class="mt-3" data-region="event-list-content-date" data-timestamp="1782014400">
+            <h5 class="h6 d-inline fw-bold px-2">domingo, 21 de junio de 2026</h5>
+        </div>
+
+
+        <div class="list-group list-group-flush">
+
+
+            <div class="list-group-item timeline-event-list-item flex-column pt-2 pb-0 border-0 px-2" data-region="event-list-item">
+                <div class="d-flex flex-wrap pb-1">
+                    <div class="d-flex me-auto pb-1 mw-100 timeline-name">
+                        <small class="text-end text-nowrap align-self-center ms-1">
+                            23:00
+                        </small>
+                        <div class="small courseicon align-self-top align-self-center mx-2 mb-1 mb-sm-0 text-nowrap  activityiconcontainer communication">
+                                <img alt="Evento de actividad" title="Evento de actividad" src="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/feedback/1779860833/monologo?filtericon=1" class="icon activityicon icon">
+                        </div>
+                        <div class="event-name-container flex-grow-1 line-height-3 nowrap text-truncate">
+                            <div class="d-flex">
+                                <h6 class="event-name mb-0 pb-1 text-truncate">
+                                    
+                                    <a href="https://aulavirtual.itla.edu.do/mod/feedback/view.php?id=144626" title="Encuesta del curso 1 cierra" aria-label="Encuesta del curso 1 actividad en Programación III 2026-C-2 Kelyn Tejada Belliard está pendiente para 21 de junio de 2026, 23:00">
+                                        Encuesta del curso 1</a>
+                                </h6>
+                            </div>
+                            <small class="mb-0">
+                                    Encuesta cierra · Programación III 2026-C-2 Kelyn Tejada Belliard
+                            </small>
+                        </div>
+                    </div>
+                    <div class="d-flex timeline-action-button">
+                        <h6 class="event-action">
+                            <a class="list-group-item-action btn btn-outline-secondary btn-sm text-nowrap" href="https://aulavirtual.itla.edu.do/mod/feedback/view.php?id=144626" aria-label="Responder a las preguntas" title="Responder a las preguntas">
+                            Responder a las preguntas
+                            </a>
+                        </h6>
+                    </div>
+                </div>
+                <div class="pt-2 border-bottom"></div>
+            </div>
+        </div>
+        <div class="mt-3" data-region="event-list-content-date" data-timestamp="1782446400">
+            <h5 class="h6 d-inline fw-bold px-2">viernes, 26 de junio de 2026</h5>
+        </div>
+
+
+        <div class="list-group list-group-flush">
+
+
+            <div class="list-group-item timeline-event-list-item flex-column pt-2 pb-0 border-0 px-2" data-region="event-list-item">
+                <div class="d-flex flex-wrap pb-1">
+                    <div class="d-flex me-auto pb-1 mw-100 timeline-name">
+                        <small class="text-end text-nowrap align-self-center ms-1">
+                            23:59
+                        </small>
+                        <div class="small courseicon align-self-top align-self-center mx-2 mb-1 mb-sm-0 text-nowrap  activityiconcontainer assessment">
+                                <img alt="Evento de actividad" title="Evento de actividad" src="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/assign/1779860833/monologo?filtericon=1" class="icon activityicon icon">
+                        </div>
+                        <div class="event-name-container flex-grow-1 line-height-3 nowrap text-truncate">
+                            <div class="d-flex">
+                                <h6 class="event-name mb-0 pb-1 text-truncate">
+                                    
+                                    <a href="https://aulavirtual.itla.edu.do/mod/assign/view.php?id=177129" title="Vencimiento de Tarea IoT" aria-label="Tarea IoT actividad en Electiva 2 2026-C-2 Hector Jeancarlos Santos Nuesi está pendiente para 26 de junio de 2026, 23:59">
+                                        Tarea IoT</a>
+                                </h6>
+                            </div>
+                            <small class="mb-0">
+                                    Vencimiento de Tarea · Electiva 2 2026-C-2 Hector Jeancarlos Santos Nuesi
+                            </small>
+                        </div>
+                    </div>
+                    <div class="d-flex timeline-action-button">
+                        <h6 class="event-action">
+                            <a class="list-group-item-action btn btn-outline-secondary btn-sm text-nowrap" href="https://aulavirtual.itla.edu.do/mod/assign/view.php?id=177129&amp;action=editsubmission" aria-label="Agregar entrega" title="Agregar entrega">
+                            Agregar entrega
+                            </a>
+                        </h6>
+                    </div>
+                </div>
+                <div class="pt-2 border-bottom"></div>
+            </div>
+        </div>
+        <div class="mt-3" data-region="event-list-content-date" data-timestamp="1782532800">
+            <h5 class="h6 d-inline fw-bold px-2">sábado, 27 de junio de 2026</h5>
+        </div>
+
+
+        <div class="list-group list-group-flush">
+
+
+            <div class="list-group-item timeline-event-list-item flex-column pt-2 pb-0 border-0 px-2" data-region="event-list-item">
+                <div class="d-flex flex-wrap pb-1">
+                    <div class="d-flex me-auto pb-1 mw-100 timeline-name">
+                        <small class="text-end text-nowrap align-self-center ms-1">
+                            23:00
+                        </small>
+                        <div class="small courseicon align-self-top align-self-center mx-2 mb-1 mb-sm-0 text-nowrap  activityiconcontainer assessment">
+                                <img alt="Evento de actividad" title="Evento de actividad" src="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/assign/1779860833/monologo?filtericon=1" class="icon activityicon icon">
+                        </div>
+                        <div class="event-name-container flex-grow-1 line-height-3 nowrap text-truncate">
+                            <div class="d-flex">
+                                <h6 class="event-name mb-0 pb-1 text-truncate">
+                                    
+                                    <a href="https://aulavirtual.itla.edu.do/mod/assign/view.php?id=144680" title="Vencimiento de Actividad de Scrum" aria-label="Actividad de Scrum actividad en Programación III 2026-C-2 Kelyn Tejada Belliard está pendiente para 27 de junio de 2026, 23:00">
+                                        Actividad de Scrum</a>
+                                </h6>
+                            </div>
+                            <small class="mb-0">
+                                    Vencimiento de Tarea · Programación III 2026-C-2 Kelyn Tejada Belliard
+                            </small>
+                        </div>
+                    </div>
+                    <div class="d-flex timeline-action-button">
+                        <h6 class="event-action">
+                            <a class="list-group-item-action btn btn-outline-secondary btn-sm text-nowrap" href="https://aulavirtual.itla.edu.do/mod/assign/view.php?id=144680&amp;action=editsubmission" aria-label="Agregar entrega" title="Agregar entrega">
+                            Agregar entrega
+                            </a>
+                        </h6>
+                    </div>
+                </div>
+                <div class="pt-2 border-bottom"></div>
+            </div>
+        </div>
+</div></div>
+                            <div class="hidden text-xs-center text-center mt-3" data-region="no-events-empty-message">
+                                <img src="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/block_timeline/1779860833/activities" alt="" style="height: 70px; width: 70px">
+                                <p class="text-muted mt-1">No hay actividades que requieran acciones</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-pane  fade" data-region="view-courses" data-midnight="1782014400" data-limit="2" data-offset="0" data-days-limit="7" data-days-offset="0" data-no-events-url="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/block_timeline/1779860833/activities" id="view_courses_6a38743cc5ad16a38743cb855d2-1" role="tabpanel">
+                        <div data-region="course-items-loading-placeholder">
+                            <ul class="list-group unstyled">
+                                <li class="list-group-item mt-3 p-0 px-2 border-0">
+                                    <div class="w-50 bg-pulse-grey mt-1 mb-2" style="height: 20px"></div>
+                                    <div>
+                                        <ul class="ps-0 list-group list-group-flush">
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        </ul>
+                                        <div class="pt-3 pb-2 d-flex justify-content-between">
+                                            <div class="w-25 bg-pulse-grey" style="height: 35px"></div>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li class="list-group-item mt-3 p-0 px-2 border-0">
+                                    <div class="w-50 bg-pulse-grey mt-1 mb-2" style="height: 20px"></div>
+                                    <div>
+                                        <ul class="ps-0 list-group list-group-flush">
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                            <li class="list-group-item px-2">
+                                                <div class="row">
+                                                    <div class="col-8 pe-0">
+                                                        <div class="d-flex flex-row align-items-center" style="height: 32px">
+                                                            <div class="bg-pulse-grey rounded-circle" style="height: 32px; width: 32px;"></div>
+                                                            <div style="flex: 1" class="ps-2">
+                                                                <div class="bg-pulse-grey w-100" style="height: 15px;"></div>
+                                                                <div class="bg-pulse-grey w-75 mt-1" style="height: 10px;"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4 pe-3">
+                                                        <div class="d-flex flex-row justify-content-end" style="height: 32px; padding-top: 2px">
+                                                            <div class="bg-pulse-grey w-75" style="height: 15px;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        </ul>
+                                        <div class="pt-3 pb-2 d-flex justify-content-between">
+                                            <div class="w-25 bg-pulse-grey" style="height: 35px"></div>
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                            <div class="bg-pulse-grey mt-1" style="width: 100px; height: 30px; margin-left: auto; margin-right: auto"></div>
+                        </div>
+                    <ul class="list-group unstyled" data-region="courses-list"></ul>
+                    <div class="hidden text-xs-center text-center pt-3" data-region="more-courses-button-container">
+                        <button type="button" class="btn btn-primary" data-action="more-courses">
+                            Mostrar más cursos
+                            <span class="hidden" data-region="loading-icon-container">
+                                <span class="loading-icon icon-no-margin"><i class="icon fa fa-spinner fa-spin fa-fw " title="Cargando" role="img" aria-label="Cargando"></i></span>
+                            </span>
+                        </button>
+                    </div>
+<div class="hidden text-xs-center text-center mt-3" data-region="no-events-empty-message">
+    <img src="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/block_timeline/1779860833/activities" alt="" style="height: 70px; width: 70px">
+    <p class="text-muted mt-1">No hay actividades que requieran acciones</p>
+</div>
+                </div>
+            </div>
+        </div>    </div>

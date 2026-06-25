@@ -1,0 +1,252 @@
+<div class="heightcontainer" data-calendar-type="main-block"><div id="calendar-upcoming-6a38743b53ad66a38743b2d2996" data-template="core_calendar/upcoming_detailed">
+    <div class="header d-flex flex-wrap p-1">
+            <div data-region="view-selector">
+                <button id="calendarviewdropdown" type="button" class="btn btn-outline-secondary dropdown-toggle ms-1 me-2 mb-2" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <span class="d-sm-inline-block" data-active-item-text="">
+                        
+                        
+                        Próximos eventos
+                    </span>
+                </button>
+                <ul class="dropdown-menu" data-show-active-item="" aria-labelledby="calendarviewdropdown">
+                    <li>
+                        <a class="dropdown-item " href="#" data-view="month" data-year="2026" data-month="6" data-day="21" data-courseid="1" data-categoryid="0">
+                            Mes
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item " href="#" data-view="day" data-year="2026" data-month="6" data-day="21" data-courseid="1" data-categoryid="0">
+                            Día
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item active" href="#" data-view="upcoming" data-year="2026" data-month="6" data-day="21" data-courseid="1" data-categoryid="0">
+                            Próximos eventos
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <label class="visually-hidden" for="calendar-course-filter">Listado de cursos</label><select class="select form-select cal_courses_flt ms-1 me-auto me-2 mb-2" id="calendar-course-filter" name="course"><option selected="selected" value="1">Todos los cursos</option><option value="1464">Cálculo Integral 2026-C-2 Maximiliano Alvarez</option><option value="1505">Programación III 2026-C-2 Kelyn Tejada Belliard</option><option value="1910">Fundamentos de Electrónica 2026-C-2 Omar De Los...</option><option value="1911">Laboratorio Fundamentos de Electrónica 2026-C-2...</option><option value="1933">Electiva 2 2026-C-2 Hector Jeancarlos Santos Nuesi</option><option value="1553">Programación Web 2026-C-2 Luis Soto Mirambeaux</option></select>
+        <button class="btn btn-primary float-sm-end float-end ms-1 mb-2" data-context-id="2" data-action="new-event-button">
+            Nuevo evento
+        </button>
+    </div>
+    <div aria-live="polite" class="visually-hidden calendar-announcements"></div>
+    <div class="calendarwrapper" data-view="upcoming" data-context-id="2" data-courseid="1">
+        <span class="overlay-icon-container hidden" data-region="overlay-icon-container">
+            <span class="loading-icon icon-no-margin"><i class="icon fa fa-spinner fa-spin fa-fw " title="Cargando" role="img" aria-label="Cargando"></i></span>
+        </span>
+            <h2 class="current text-center">Próximos eventos</h2>
+            <div class="eventlist my-1">
+            <div data-type="event" data-course-id="1505" data-event-id="67906" class="event mt-3" data-event-component="mod_feedback" data-event-eventtype="close" data-eventtype-course="1" data-event-title="Encuesta del curso 1 cierra" data-event-count="">
+                <div class="card rounded">
+                    <div class="box card-header clearfix calendar_event_course">
+                        <div class="commands float-sm-end">
+                        </div>
+                            <div class="d-inline-block mt-1 align-top">
+                                    <img alt="Evento de actividad" title="Evento de actividad" src="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/feedback/1779860833/monologo?filtericon=1" class="icon activityicon icon">
+                            </div>
+                        <div class="d-inline-block">
+                            <h3 class="name d-inline-block">Encuesta del curso 1 cierra</h3>
+                        </div>
+                    </div>
+                    <div class="description card-body">
+                        <div class="row">
+                            <div class="col-1"><i class="icon fa-regular fa-clock fa-fw " title="Cuándo" role="img" aria-label="Cuándo"></i></div>
+                            <div class="col-11"><a href="https://aulavirtual.itla.edu.do/calendar/view.php?view=day&amp;time=1782097200" title="domingo, 21 junio">
+        <span class="date  text-danger" data-timestamp="1782097200" title="domingo, 21 junio">
+                <img class="icon me-0 pb-1" alt="Advertencia" title="Advertencia" src="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/core/1779860833/i/warning">            Hoy, 21 de junio, 23:00
+        </span>
+    </a></div>
+                        </div>
+                            <div class="row mt-1">
+                                <div class="col-1"><i class="icon fa-regular fa-calendar fa-fw " title="Tipo de evento" role="img" aria-label="Tipo de evento"></i></div>
+                                <div class="col-11">Evento de curso</div>
+                            </div>
+                            <div class="row mt-1">
+                                <div class="col-1"><i class="icon fa fa-align-left fa-fw " title="Descripción" role="img" aria-label="Descripción"></i></div>
+                                <div class="description-content col-11"><div class="no-overflow"><p dir="ltr" style="text-align:left;">Esta encuesta sirve para entender el nivel de comprensión de los temas y medir el nivel de satisfacción con los contenidos y metodologías aplicadas</p></div></div>
+                            </div>
+                            <div class="row mt-1">
+                                <div class="col-1"><i class="icon fa fa-graduation-cap fa-fw " title="Curso" role="img" aria-label="Curso"></i></div>
+                                <div class="col-11"><a href="https://aulavirtual.itla.edu.do/course/view.php?id=1505">Programación III 2026-C-2 Kelyn Tejada Belliard</a></div>
+                            </div>
+                    </div>
+                        <div class="card-footer text-end bg-transparent">
+                            <a href="https://aulavirtual.itla.edu.do/mod/feedback/view.php?id=144626" class="card-link">Responder a las preguntas</a>
+                        </div>
+                </div>
+            </div>
+            <div data-type="event" data-course-id="1933" data-event-id="78693" class="event mt-3" data-event-component="mod_assign" data-event-eventtype="due" data-eventtype-course="1" data-event-title="Vencimiento de Tarea IoT" data-event-count="">
+                <div class="card rounded">
+                    <div class="box card-header clearfix calendar_event_course">
+                        <div class="commands float-sm-end">
+                        </div>
+                            <div class="d-inline-block mt-1 align-top">
+                                    <img alt="Evento de actividad" title="Evento de actividad" src="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/assign/1779860833/monologo?filtericon=1" class="icon activityicon icon">
+                            </div>
+                        <div class="d-inline-block">
+                            <h3 class="name d-inline-block">Vencimiento de Tarea IoT</h3>
+                        </div>
+                    </div>
+                    <div class="description card-body">
+                        <div class="row">
+                            <div class="col-1"><i class="icon fa-regular fa-clock fa-fw " title="Cuándo" role="img" aria-label="Cuándo"></i></div>
+                            <div class="col-11"><a href="https://aulavirtual.itla.edu.do/calendar/view.php?view=day&amp;time=1782532740" title="viernes, 26 junio">
+        <span class="date  " data-timestamp="1782532740">
+            viernes, 26 junio, 23:59
+        </span>
+    </a></div>
+                        </div>
+                            <div class="row mt-1">
+                                <div class="col-1"><i class="icon fa-regular fa-calendar fa-fw " title="Tipo de evento" role="img" aria-label="Tipo de evento"></i></div>
+                                <div class="col-11">Evento de curso</div>
+                            </div>
+                            <div class="row mt-1">
+                                <div class="col-1"><i class="icon fa fa-align-left fa-fw " title="Descripción" role="img" aria-label="Descripción"></i></div>
+                                <div class="description-content col-11"><p dir="ltr" style="text-align:left;"></p>
+<p>Investigar cómo funcionan y cuales son los beneficios de usar estas bases de datos para proyectos de IoT:</p>
+<ul>
+<li>influx DB</li>
+<li>Apache Cassandra</li>
+<li>RethinkDB</li>
+<li>MongoDB</li>
+<li>Sqlite</li>
+<li>Redis</li>
+</ul>
+<p><strong>Importante: Tipo de letra Arial 11pts, espaciado 1.5, máximo 15 pag.</strong></p>
+<p></p></div>
+                            </div>
+                            <div class="row mt-1">
+                                <div class="col-1"><i class="icon fa fa-graduation-cap fa-fw " title="Curso" role="img" aria-label="Curso"></i></div>
+                                <div class="col-11"><a href="https://aulavirtual.itla.edu.do/course/view.php?id=1933">Electiva 2 2026-C-2 Hector Jeancarlos Santos Nuesi</a></div>
+                            </div>
+                    </div>
+                        <div class="card-footer text-end bg-transparent">
+                            <a href="https://aulavirtual.itla.edu.do/mod/assign/view.php?id=177129&amp;action=editsubmission" class="card-link">Agregar entrega</a>
+                        </div>
+                </div>
+            </div>
+            <div data-type="event" data-course-id="1505" data-event-id="67900" class="event mt-3" data-event-component="mod_assign" data-event-eventtype="due" data-eventtype-course="1" data-event-title="Vencimiento de Actividad de Scrum" data-event-count="">
+                <div class="card rounded">
+                    <div class="box card-header clearfix calendar_event_course">
+                        <div class="commands float-sm-end">
+                        </div>
+                            <div class="d-inline-block mt-1 align-top">
+                                    <img alt="Evento de actividad" title="Evento de actividad" src="https://aulavirtual.itla.edu.do/theme/image.php/boost_itla/assign/1779860833/monologo?filtericon=1" class="icon activityicon icon">
+                            </div>
+                        <div class="d-inline-block">
+                            <h3 class="name d-inline-block">Vencimiento de Actividad de Scrum</h3>
+                        </div>
+                    </div>
+                    <div class="description card-body">
+                        <div class="row">
+                            <div class="col-1"><i class="icon fa-regular fa-clock fa-fw " title="Cuándo" role="img" aria-label="Cuándo"></i></div>
+                            <div class="col-11"><a href="https://aulavirtual.itla.edu.do/calendar/view.php?view=day&amp;time=1782615600" title="sábado, 27 junio">
+        <span class="date  " data-timestamp="1782615600">
+            sábado, 27 junio, 23:00
+        </span>
+    </a></div>
+                        </div>
+                            <div class="row mt-1">
+                                <div class="col-1"><i class="icon fa-regular fa-calendar fa-fw " title="Tipo de evento" role="img" aria-label="Tipo de evento"></i></div>
+                                <div class="col-11">Evento de curso</div>
+                            </div>
+                            <div class="row mt-1">
+                                <div class="col-1"><i class="icon fa fa-align-left fa-fw " title="Descripción" role="img" aria-label="Descripción"></i></div>
+                                <div class="description-content col-11"><p dir="ltr" style="text-align:left;"></p>
+<p></p>
+<h3><strong><a class="autolink" title="Actividad de Scrum" href="https://aulavirtual.itla.edu.do/mod/assign/view.php?id=144680">Actividad de Scrum</a>: Trabajo en equipo y desarrollo de un proyecto ágil</strong></h3>
+<p><strong>Instrucciones</strong><br>Formen un equipo de trabajo y desarrollen un proyecto usando la metodología <a class="autolink" title="Scrum" href="https://aulavirtual.itla.edu.do/mod/resource/view.php?id=144653">Scrum</a>. Deben cumplir con los siguientes requisitos:</p>
+<ol>
+<li>
+<p><strong>Elección del Product Owner (PO)</strong><br>Seleccionen un Product Owner dentro del equipo y justifiquen la elección basándose en las características de este rol en <a class="autolink" title="Scrum" href="https://aulavirtual.itla.edu.do/mod/resource/view.php?id=144653">Scrum</a>. Consideren habilidades como liderazgo, conocimiento del producto y capacidad de comunicación.</p>
+</li>
+<li>
+<p><strong>Creación del Product Backlog (Épicas)</strong><br>El Product Owner, con el apoyo del equipo, deberá crear un Product Backlog que contenga al menos tres épicas. Asegúrense de que las épicas abarquen diferentes aspectos del proyecto y priorícenlas correctamente.</p>
+</li>
+<li>
+<p><strong>Historias de usuario y criterios de aceptación</strong><br>Creen al menos <strong>tres</strong> historias de usuario con sus respectivos criterios de aceptación. Usen los formatos estándar de <a class="autolink" title="Scrum" href="https://aulavirtual.itla.edu.do/mod/resource/view.php?id=144653">Scrum</a>,. (Use llos ejemplos de los videos en la plataforma y lo viste en clase)</p>
+</li>
+<li>
+<p><strong>Elección del <a class="autolink" title="Scrum" href="https://aulavirtual.itla.edu.do/mod/resource/view.php?id=144653">Scrum</a> Master</strong><br>Seleccionen un miembro del equipo como <a class="autolink" title="Scrum" href="https://aulavirtual.itla.edu.do/mod/resource/view.php?id=144653">Scrum</a> Master y describan detalladamente las funciones que este desempeñará en el equipo a lo largo del proyecto.</p>
+</li>
+<li>
+<p><strong>Definición de tareas</strong><br>El equipo debe desglosar cada historia de usuario en tareas específicas. Cada tarea debe ser asignada a uno o más miembros del equipo, detallando el rol que desempeñarán (desarrollador, QA, líder, etc.).</p>
+</li>
+<li>
+<p><strong>Definición de ceremonias</strong><br>Describan las ceremonias que llevarán a cabo durante el proyecto, incluyendo fechas y horarios de reuniones. Asegúrense de incluir planning meetings, daily scrums, sprint reviews y retrospectives.</p>
+</li>
+<li>
+<p><strong>Artefactos</strong><br>Expliquen los artefactos que estarán usando en el proceso (Product Backlog, Sprint Backlog, Increment, etc.) y cómo estos apoyarán el desarrollo del proyecto.</p>
+</li>
+<li>
+<p><strong>Entrega final</strong><br>Entreguen un documento en PDF donde describan detalladamente cada uno de los puntos anteriores. Valoraremos la creatividad y la claridad en la presentación de la información.</p>
+</li>
+<li>
+<p><strong>Subida del documento</strong><br>Cada integrante del equipo debe subir el documento en la plataforma de ITLA virtual. <strong>Integrante que no entregue, no será evaluado. Formato de entrega PDF o Word. Se valorará diseño del documento (presentación, índice, introducción, numeración de paginas, gráficos, matrices, figuras.</strong></p>
+</li>
+<li>
+<p><strong>Fechas</strong><br>La entrega se debe realizar antes de la fecha de cierre indicada en la plataforma. No se aceptarán entregas posteriores ni excepciones.</p>
+</li>
+</ol>
+<h3><strong>Rúbrica de evaluación (5 puntos)</strong></h3>
+<table>
+<thead>
+<tr>
+<th><strong>Criterio</strong></th>
+<th><strong>Descripción</strong></th>
+<th><strong>Puntos</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Elección del PO y justificación</strong></td>
+<td>Selección lógica y adecuada del PO, basada en las habilidades requeridas para el rol.</td>
+<td>0.5</td>
+</tr>
+<tr>
+<td><strong>Creación del Product Backlog (Épicas)</strong></td>
+<td>Al menos 3 épicas bien definidas, priorizadas y organizadas de forma clara.</td>
+<td>1.0</td>
+</tr>
+<tr>
+<td><strong>Historias de usuario y criterios de aceptación</strong></td>
+<td>Mínimo 3 historias con criterios de aceptación claros y creatividad en la presentación del formato.</td>
+<td>1.0</td>
+</tr>
+<tr>
+<td><strong>Elección del <a class="autolink" title="Scrum" href="https://aulavirtual.itla.edu.do/mod/resource/view.php?id=144653">Scrum</a> Master y definición de tareas</strong></td>
+<td>Asignación de un <a class="autolink" title="Scrum" href="https://aulavirtual.itla.edu.do/mod/resource/view.php?id=144653">Scrum</a> Master y tareas bien definidas para cada historia de usuario.</td>
+<td>1.0</td>
+</tr>
+<tr>
+<td><strong>Ceremonias, artefactos y roles definidos</strong></td>
+<td>Descripción clara de las ceremonias y artefactos. Definición clara de los roles de cada integrante.</td>
+<td>0.5</td>
+</tr>
+<tr>
+<td><strong>Calidad y creatividad en la presentación</strong></td>
+<td>Documento bien organizado, claridad en la exposición y creatividad en la entrega.</td>
+<td>1.0</td>
+</tr>
+</tbody>
+</table>
+<p dir="ltr" style="text-align:left;"></p></div>
+                            </div>
+                            <div class="row mt-1">
+                                <div class="col-1"><i class="icon fa fa-graduation-cap fa-fw " title="Curso" role="img" aria-label="Curso"></i></div>
+                                <div class="col-11"><a href="https://aulavirtual.itla.edu.do/course/view.php?id=1505">Programación III 2026-C-2 Kelyn Tejada Belliard</a></div>
+                            </div>
+                    </div>
+                        <div class="card-footer text-end bg-transparent">
+                            <a href="https://aulavirtual.itla.edu.do/mod/assign/view.php?id=144680&amp;action=editsubmission" class="card-link">Agregar entrega</a>
+                        </div>
+                </div>
+            </div>
+    </div>    </div>
+</div></div><div class="bottom">
+        <span class="footer-link">
+            <a href="https://aulavirtual.itla.edu.do/calendar/managesubscriptions.php?course=1">Importar o exportar calendarios</a>
+        </span>
+</div>

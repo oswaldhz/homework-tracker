@@ -1,0 +1,40 @@
+# Dart/Flutter
+.dart_tool/
+.packages
+pubspec.lock
+build/
+*.dart_tool/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Local configuration
+*.local.yaml
+*.local.json
+
+# Secrets (never commit)
+*.env
+*.key
+.gemini_api_key
+
+# Installer outputs
+installer/installer_output/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
