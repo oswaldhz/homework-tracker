@@ -279,13 +279,87 @@ class ApiService extends ChangeNotifier {
       final task = await DatabaseService.instance.getTask(taskId);
       if (task == null) return {'error': 'Task not found'};
 
-      return await AiService.instance.findMaterials(
-        taskTitle: task['title'],
-        taskDescription: task['description'] ?? '',
-        courseName: task['course_name'] ?? '',
-      );
+      final cred = await DatabaseService.instance.getCredentials();
+      String? moodleUrl;
+      String? username;
+      String? password;
+      String? sessionCookie;
+
+      if (cred != null) {
+        moodleUrl = cred['moodle_url'] as String?;
+        username = await AuthService.instance.decrypt(cred['encrypted_username']);
+        password = await AuthService.instance.decrypt(cred['encrypted_password']);
+        final loginType = cred['login_type'] as String? ?? 'moodle';
+        sessionCookie = loginType == 'office365' ? password : null;
+      }
+
+      // Run AI search and Moodle content scraping in parallel
+      final results = await Future.wait([
+        AiService.instance.findMaterials(
+          taskTitle: task['title'],
+          taskDescription: task['description'] ?? '',
+          courseName: task['course_name'] ?? '',
+          moodleUrl: moodleUrl,
+          username: username,
+          password: password,
+          sessionCookie: sessionCookie,
+        ),
+        _scrapeMoodleContent(task, moodleUrl, username, password, sessionCookie),
+      ]);
+
+      final aiResult = results[0] as Map<String, dynamic>;
+      final moodleResources = results[1] as List<Map<String, dynamic>>;
+
+      // Merge Moodle resources into AI result
+      if (moodleResources.isNotEmpty) {
+        aiResult['moodle_resources'] = moodleResources;
+        final existingPdfs = aiResult['pdfs'] as List<dynamic>? ?? [];
+        final moodlePdfs = moodleResources.where((r) => r['type'] == 'pdf').toList();
+        final existingBooks = aiResult['books'] as List<dynamic>? ?? [];
+        final moodleBooks = moodleResources.where((r) => r['type'] == 'book').toList();
+        final moodleVideos = moodleResources.where((r) => r['type'] == 'video').toList();
+
+        aiResult['pdfs'] = [...existingPdfs, ...moodlePdfs];
+        aiResult['books'] = [...existingBooks, ...moodleBooks];
+        if (moodleVideos.isNotEmpty) {
+          final existingVideos = aiResult['videos'] as List<dynamic>? ?? [];
+          aiResult['videos'] = [...existingVideos, ...moodleVideos];
+        }
+      }
+
+      return aiResult;
     } catch (e) {
       return {'error': 'Error: $e'};
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _scrapeMoodleContent(
+    Map<String, dynamic>? task,
+    String? moodleUrl,
+    String? username,
+    String? password,
+    String? sessionCookie,
+  ) async {
+    if (moodleUrl == null || username == null || password == null || task == null) {
+      return [];
+    }
+
+    try {
+      final courseName = task['course_name'] as String? ?? '';
+      if (courseName.isEmpty) return [];
+
+      final resources = await MoodleService.instance.scrapeCourseContent(
+        moodleUrl: moodleUrl,
+        username: username,
+        password: password,
+        sessionCookie: sessionCookie,
+        courseName: courseName,
+      );
+
+      return resources;
+    } catch (e) {
+      debugPrint('Moodle content scraping error: $e');
+      return [];
     }
   }
 

@@ -47,6 +47,10 @@ class AiService {
     required String taskTitle,
     required String taskDescription,
     required String courseName,
+    String? moodleUrl,
+    String? username,
+    String? password,
+    String? sessionCookie,
   }) async {
     await _loadApiKey();
 
@@ -62,11 +66,34 @@ class AiService {
       };
     }
 
+    // First, scrape Moodle course content if credentials are available
+    List<Map<String, dynamic>> moodleResources = [];
+    if (moodleUrl != null && moodleUrl.isNotEmpty) {
+      try {
+        moodleResources = await _scrapeMoodleCourseContent(
+          moodleUrl: moodleUrl,
+          username: username ?? '',
+          password: password ?? '',
+          sessionCookie: sessionCookie,
+          courseName: courseName,
+        );
+      } catch (e) {
+        // Continue even if Moodle scraping fails
+      }
+    }
+
     final prompt = '''You are an educational AI assistant. Analyze this homework task and generate search queries and educational content.
 
 Task Title: $taskTitle
 Course: $courseName
 Description: $taskDescription
+
+CRITICAL INSTRUCTIONS FOR URLs:
+- ONLY provide URLs that you are 100% CERTAIN exist and are accessible
+- DO NOT make up or hallucinate URLs
+- ONLY use URLs from well-known educational sites: W3Schools, MDN Web Docs, GeeksforGeeks, Tutorialspoint, Real Python, freeCodeCamp, Khan Academy, Coursera, edX, MIT OpenCourseWare
+- If you're unsure about a URL, DO NOT include it
+- Prefer general documentation pages over specific articles
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no extra text):
 
@@ -97,8 +124,8 @@ Requirements:
 - Generate 3 specific YouTube search queries in English or Spanish
 - 3-5 key concepts with brief explanations
 - Practical study tips
-- 2-3 article suggestions from educational websites (W3Schools, MDN, GeeksforGeeks, tutorialspoint, Real Python, freeCodeCamp, Khan Academy, etc.)
-- All article URLs MUST be real, existing pages from those sites
+- 2-3 article suggestions from educational websites ONLY if you are certain the URLs exist
+- All article URLs MUST be real, existing pages from trusted educational sites
 
 Return ONLY the JSON object.''';
 
@@ -185,14 +212,23 @@ Return ONLY the JSON object.''';
         }
       }
 
+      // Combine Moodle resources with AI-generated content
+      final allPdfs = <Map<String, dynamic>>[...moodleResources.where((r) => r['type'] == 'pdf')];
+      final allVideosCombined = <Map<String, dynamic>>[
+        ...validVideos,
+        ...moodleResources.where((r) => r['type'] == 'video'),
+      ];
+
       return {
-        'videos': validVideos,
+        'videos': allVideosCombined.take(8).toList(),
         'articles': articles,
-        'pdfs': [],
+        'pdfs': allPdfs,
+        'books': moodleResources.where((r) => r['type'] == 'book').toList(),
         'key_concepts': List<Map<String, dynamic>>.from(aiData['key_concepts'] ?? []),
         'study_tips': aiData['study_tips'] ?? '',
         'search_suggestions': searchQueries,
         'ai_generated': true,
+        'moodle_resources': moodleResources,
       };
     } catch (e) {
       final errorStr = e.toString().toLowerCase();
@@ -216,6 +252,30 @@ Return ONLY the JSON object.''';
         'ai_generated': false,
         'error': 'AI error: $e',
       };
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _scrapeMoodleCourseContent({
+    required String moodleUrl,
+    required String username,
+    required String password,
+    String? sessionCookie,
+    required String courseName,
+  }) async {
+    try {
+      final resources = <Map<String, dynamic>>[];
+      
+      // This would need to be implemented in moodle_service.dart
+      // For now, return empty list
+      // In a real implementation, you would:
+      // 1. Login to Moodle
+      // 2. Navigate to the course page
+      // 3. Scrape all resources (books, PDFs, videos, links)
+      // 4. Return them as a list
+      
+      return resources;
+    } catch (e) {
+      return [];
     }
   }
 

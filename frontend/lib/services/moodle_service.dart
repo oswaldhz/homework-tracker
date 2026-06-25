@@ -565,22 +565,28 @@ class MoodleService {
   }) async {
     final client = _createClient();
     try {
+      await Logger.instance.log('TOGGLE: Starting toggleCompletion for $taskUrl, complete=$complete');
+
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
         await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
       } else {
         await _login(moodleUrl, username, password);
       }
 
+      // First, get the task page to extract sesskey and verify current state
       final taskPageResp = await _get(client, taskUrl);
 
       final sesskey = _extractSesskey(taskPageResp.body);
       if (sesskey == null) {
+        await Logger.instance.log('TOGGLE: Could not find sesskey');
         return {'success': false, 'message': 'Could not find session key. Please try again.'};
       }
+      await Logger.instance.log('TOGGLE: Found sesskey: $sesskey');
 
       final uri = Uri.parse(taskUrl);
       final cmid = uri.queryParameters['id'];
       if (cmid == null) {
+        await Logger.instance.log('TOGGLE: Invalid task URL - no cmid');
         return {'success': false, 'message': 'Invalid task URL.'};
       }
 
@@ -588,25 +594,94 @@ class MoodleService {
       Exception? lastError;
       for (int attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          await _get(client, '$_baseUrl/course/togglecompletion.php?id=$cmid&sesskey=$sesskey');
+          await Logger.instance.log('TOGGLE: Attempt $attempt: Sending toggle request');
           
-          // Verify the toggle worked by checking the page
-          await Future.delayed(const Duration(milliseconds: 500));
+          // Moodle togglecompletion.php needs a proper GET request with sesskey
+          // It returns a redirect back to the course page or the activity page
+          final toggleUrl = '$_baseUrl/course/togglecompletion.php?id=$cmid&sesskey=$sesskey';
+          await Logger.instance.log('TOGGLE: URL: $toggleUrl');
+          
+          try {
+            final toggleResp = await _get(client, toggleUrl);
+            await Logger.instance.log('TOGGLE: Response status: ${toggleResp.statusCode}');
+            await Logger.instance.log('TOGGLE: Response URL: ${toggleResp.request?.url}');
+          } catch (e) {
+            await Logger.instance.log('TOGGLE: Toggle request exception (expected redirect): $e');
+          }
+
+          // Wait for Moodle to process
+          await Future.delayed(const Duration(milliseconds: 1000));
+          
+          // Verify the toggle worked by checking the page:
+          // - Check for completion checkbox/toggle state
+          // - Check for completion status text
+          // - Check the URL to see if we ended up on the course page (success indicator)
           final verifyResp = await _get(client, taskUrl);
           final verifyDoc = html_parser.parse(verifyResp.body);
+          final verifyBody = verifyResp.body;
           
-          // Check for completion indicator
-          final completionIcon = verifyDoc.querySelector('.activity-completion-icon, .completionstatus, [class*="completion"]');
           bool verified = false;
-          if (completionIcon != null) {
-            final classes = completionIcon.attributes['class'] ?? '';
-            if (complete) {
-              verified = classes.contains('complete') || classes.contains('completed') || classes.contains('check');
-            } else {
-              verified = !classes.contains('complete') && !classes.contains('completed');
+          
+          // Method 1: Check for manual completion checkbox state
+          final completionCheckbox = verifyDoc.querySelector('input[type="checkbox"][name="completion"]');
+          if (completionCheckbox != null) {
+            final isChecked = completionCheckbox.attributes['checked'] != null;
+            if (complete == isChecked) {
+              verified = true;
+              await Logger.instance.log('TOGGLE: Verified via checkbox, checked=$isChecked');
             }
           }
           
+          // Method 2: Check completion icon/indicator class
+          if (!verified) {
+            final completionEls = verifyDoc.querySelectorAll(
+              '.completion_checkbox, .completion_complete, .completion_incomplete, '
+              '[class*="completion"], .activity-completion, .completion-icon'
+            );
+            for (final el in completionEls) {
+              final classes = (el.attributes['class'] ?? '') + ' ' + (el.text.trim().toLowerCase());
+              if (complete && (classes.contains('completion_complete') || classes.contains('complete') || classes.contains('checked') || classes.contains('check'))) {
+                verified = true;
+                await Logger.instance.log('TOGGLE: Verified via completion class: ${el.attributes['class']}');
+                break;
+              } else if (!complete && (classes.contains('completion_incomplete') || classes.contains('incomplete') || classes.isEmpty)) {
+                verified = true;
+                await Logger.instance.log('TOGGLE: Verified via incomplete class: ${el.attributes['class']}');
+                break;
+              }
+            }
+          }
+
+          // Method 3: Check if we have a form with completion tracking
+          if (!verified) {
+            final manualCompletion = verifyDoc.querySelector('.manual-completion-button, [data-toggle="manual-completion"]');
+            if (manualCompletion != null && !complete) {
+              verified = true;
+              await Logger.instance.log('TOGGLE: Verified via manual-completion-button available');
+            }
+          }
+
+          // Method 4: In some Moodle themes, completion is shown via image/icon
+          if (!verified) {
+            final completionIcons = verifyDoc.querySelectorAll('img[alt*="complete" i], img[alt*="incomplete" i], .completion-icon img');
+            for (final icon in completionIcons) {
+              final alt = (icon.attributes['alt'] ?? '').toLowerCase();
+              final src = (icon.attributes['src'] ?? '').toLowerCase();
+              final combined = '$alt $src';
+              if (complete && (combined.contains('complete') || combined.contains('check'))) {
+                verified = true;
+                await Logger.instance.log('TOGGLE: Verified via completion icon alt/src');
+                break;
+              } else if (!complete && combined.contains('incomplete')) {
+                verified = true;
+                await Logger.instance.log('TOGGLE: Verified via incomplete icon');
+                break;
+              }
+            }
+          }
+
+          await Logger.instance.log('TOGGLE: Attempt $attempt - verified=$verified');
+
           if (verified || attempt == maxRetries) {
             return {
               'success': true, 
@@ -616,12 +691,14 @@ class MoodleService {
           }
         } catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
+          await Logger.instance.log('TOGGLE: Attempt $attempt error: $e');
           if (attempt < maxRetries) {
             await Future.delayed(retryDelay);
           }
         }
       }
 
+      await Logger.instance.log('TOGGLE: Failed after retries');
       return {'success': false, 'message': 'Failed to toggle completion after retries: ${lastError?.toString() ?? "Unknown error"}'};
     } finally {
       client.close();
@@ -679,7 +756,7 @@ class MoodleService {
 
       // Also check for itemid in the repository call context
       if (itemid == null) {
-        final itemidMatch = RegExp("itemid[\"']?\\s*[:=]\\s*[\"']?(\\d+)").firstMatch(editResp.body);
+        final itemidMatch = RegExp(r"""itemid["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
         if (itemidMatch != null) {
           itemid = int.tryParse(itemidMatch.group(1)!);
           await Logger.instance.log('UPLOAD: Found itemid from regex: $itemid');
@@ -695,8 +772,12 @@ class MoodleService {
       // Step 2: Upload file to Moodle draft area (repository)
       await Logger.instance.log('UPLOAD: Uploading file to draft area');
       final file = await http.MultipartFile.fromPath('repo_upload_file', filePath);
-      final uploadRequest = http.MultipartRequest('POST', Uri.parse('$_baseUrl/repository/repository_ajax.php?action=upload'))
-        ..headers.addAll({..._headers(), 'Accept': 'application/json'})
+
+      // Build the upload URL with action as query param AND POST field for compatibility
+      final uploadUrl = '$_baseUrl/repository/repository_ajax.php';
+      final uploadRequest = http.MultipartRequest('POST', Uri.parse(uploadUrl))
+        ..headers.addAll({..._headers(), 'Accept': 'application/json, text/plain, */*'})
+        ..fields['action'] = 'upload'
         ..fields['sesskey'] = sesskey
         ..fields['repo_id'] = '4'
         ..fields['env'] = 'filemanager'
@@ -704,18 +785,24 @@ class MoodleService {
         ..fields['author'] = username
         ..files.add(file);
 
-      final uploadStream = await client.send(uploadRequest).timeout(_requestTimeout);
+      await Logger.instance.log('UPLOAD: Sending request to $uploadUrl with fields: action=upload, sesskey=$sesskey, repo_id=4, env=filemanager, itemid=$itemid');
+
+      final uploadStream = await client.send(uploadRequest).timeout(const Duration(seconds: 60));
       final uploadResp = await http.Response.fromStream(uploadStream);
       _parseCookies(uploadResp);
       
+      final respBody = uploadResp.body;
       await Logger.instance.log('UPLOAD: Draft upload response status: ${uploadResp.statusCode}');
-      await Logger.instance.log('UPLOAD: Draft upload response body: ${uploadResp.body.substring(0, uploadResp.body.length.clamp(0, 500))}');
+      await Logger.instance.log('UPLOAD: Draft upload response length: ${respBody.length}');
+      await Logger.instance.log('UPLOAD: Draft upload response first 500 chars: ${respBody.substring(0, respBody.length.clamp(0, 500))}');
 
       // Parse upload response to get the file info (including updated itemid)
       int? uploadedItemid;
       String? uploadedFilename;
+
+      // Try to parse as JSON first
       try {
-        final uploadData = jsonDecode(uploadResp.body);
+        final uploadData = jsonDecode(respBody);
         if (uploadData is List && uploadData.isNotEmpty) {
           final firstFile = uploadData[0];
           uploadedItemid = firstFile['itemid'] as int?;
@@ -727,7 +814,50 @@ class MoodleService {
           await Logger.instance.log('UPLOAD: Parsed from map - itemid: $uploadedItemid, filename: $uploadedFilename');
         }
       } catch (e) {
-        await Logger.instance.log('UPLOAD: Failed to parse upload response: $e');
+        await Logger.instance.log('UPLOAD: JSON parse failed: $e');
+        // Try to extract file info from HTML response (Moodle sometimes returns HTML error)
+        if (respBody.contains('error') || respBody.contains('Error') || respBody.contains('not logged in') || respBody.contains('invalid')) {
+          await Logger.instance.log('UPLOAD: Detected error in response body');
+          return {
+            'success': false,
+            'open_in_browser': true,
+            'url': taskUrl,
+            'message': 'Upload to Moodle failed. The file may be too large or the session expired. Try uploading directly in your browser.',
+            'debug': respBody.substring(0, respBody.length.clamp(0, 300)),
+          };
+        }
+
+        // Try alternative upload approach: POST with query-string action parameter
+        await Logger.instance.log('UPLOAD: Trying alternative upload method with repo_upload_file parameter');
+        try {
+          final altUploadResp = await client.post(
+            Uri.parse('$_baseUrl/repository/repository_ajax.php?action=upload'),
+            headers: {
+              ..._headers(),
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Accept': 'application/json',
+            },
+            body: {
+              'sesskey': sesskey,
+              'repo_id': '4',
+              'env': 'filemanager',
+              'itemid': itemid.toString(),
+              'author': username,
+            },
+          ).timeout(const Duration(seconds: 30));
+          
+          await Logger.instance.log('UPLOAD: Alternative upload response: ${altUploadResp.statusCode} - ${altUploadResp.body.substring(0, altUploadResp.body.length.clamp(0, 300))}');
+        } catch (altErr) {
+          await Logger.instance.log('UPLOAD: Alternative upload also failed: $altErr');
+        }
+
+        return {
+          'success': false,
+          'open_in_browser': true,
+          'url': taskUrl,
+          'message': 'File upload to draft area failed. Please try in your browser.',
+          'debug': respBody.substring(0, respBody.length.clamp(0, 300)),
+        };
       }
 
       if (uploadedItemid == null && uploadedFilename == null) {
@@ -752,7 +882,7 @@ class MoodleService {
       ).timeout(_requestTimeout);
       
       await Logger.instance.log('UPLOAD: Savesubmission response status: ${submitResp.statusCode}');
-      await Logger.instance.log('UPLOAD: Savesubmission response body: ${submitResp.body.substring(0, submitResp.body.length.clamp(0, 500))}');
+      await Logger.instance.log('UPLOAD: Savesubmission response length: ${submitResp.body.length}');
 
       // Step 4: Verify submission by checking the assignment page
       await Future.delayed(const Duration(milliseconds: 500));
@@ -970,5 +1100,139 @@ class MoodleService {
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       throw Exception('Could not open $ssoUrl in the browser.');
     }
+  }
+
+  /// Scrapes course content from Moodle to find books, PDFs, videos, and other resources
+  Future<List<Map<String, dynamic>>> scrapeCourseContent({
+    required String moodleUrl,
+    required String username,
+    required String password,
+    String? sessionCookie,
+    required String courseName,
+  }) async {
+    final client = _createClient();
+    final resources = <Map<String, dynamic>>[];
+    
+    try {
+      await Logger.instance.log('COURSE_CONTENT: Starting scrape for course: $courseName');
+      
+      if (sessionCookie != null && sessionCookie.isNotEmpty) {
+        await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+      } else {
+        await _login(moodleUrl, username, password);
+      }
+
+      // Navigate to course page
+      final courseUrl = '$_baseUrl/course/view.php?name=${Uri.encodeComponent(courseName)}';
+      await Logger.instance.log('COURSE_CONTENT: Fetching course page: $courseUrl');
+      
+      final courseResp = await _get(client, courseUrl);
+      final courseDoc = html_parser.parse(courseResp.body);
+
+      // Find all activity/resource links
+      final activityLinks = courseDoc.querySelectorAll('.activity, .resource, .modtype_label, [class*="activity"]');
+      await Logger.instance.log('COURSE_CONTENT: Found ${activityLinks.length} activities/resources');
+
+      for (final activity in activityLinks) {
+        try {
+          final link = activity.querySelector('a[href]');
+          if (link == null) continue;
+
+          final href = link.attributes['href'] ?? '';
+          final text = link.text.trim();
+          final activityType = _detectResourceType(href, text, activity);
+
+          if (href.isEmpty || text.isEmpty) continue;
+
+          // Determine resource type and extract relevant info
+          Map<String, dynamic>? resource;
+          
+          if (activityType == 'pdf') {
+            resource = {
+              'type': 'pdf',
+              'title': text,
+              'url': _resolveUrl(href),
+              'source': 'Moodle Course',
+            };
+          } else if (activityType == 'video') {
+            resource = {
+              'type': 'video',
+              'title': text,
+              'url': _resolveUrl(href),
+              'channel': 'Moodle Course',
+              'description': 'Course video resource',
+            };
+          } else if (activityType == 'book') {
+            resource = {
+              'type': 'book',
+              'title': text,
+              'url': _resolveUrl(href),
+              'source': 'Moodle Course',
+            };
+          } else if (activityType == 'link') {
+            resource = {
+              'type': 'link',
+              'title': text,
+              'url': _resolveUrl(href),
+              'source': 'Moodle Course',
+            };
+          }
+
+          if (resource != null) {
+            resources.add(resource);
+            await Logger.instance.log('COURSE_CONTENT: Found ${resource['type']}: ${resource['title']}');
+          }
+        } catch (e) {
+          await Logger.instance.log('COURSE_CONTENT: Error parsing activity: $e');
+        }
+      }
+
+      await Logger.instance.log('COURSE_CONTENT: Total resources found: ${resources.length}');
+      return resources;
+    } catch (e) {
+      await Logger.instance.log('COURSE_CONTENT: Exception: $e');
+      return resources;
+    } finally {
+      client.close();
+    }
+  }
+
+  String _detectResourceType(String href, String text, dynamic element) {
+    final hrefLower = href.toLowerCase();
+    final textLower = text.toLowerCase();
+    final classes = (element.attributes['class'] ?? '').toLowerCase();
+
+    // PDF detection
+    if (hrefLower.contains('.pdf') || 
+        hrefLower.contains('/mod/resource/') ||
+        textLower.contains('pdf') ||
+        classes.contains('pdf')) {
+      return 'pdf';
+    }
+
+    // Video detection
+    if (hrefLower.contains('video') || 
+        hrefLower.contains('youtube') ||
+        hrefLower.contains('vimeo') ||
+        textLower.contains('video') ||
+        textLower.contains('vídeo') ||
+        classes.contains('video')) {
+      return 'video';
+    }
+
+    // Book detection
+    if (hrefLower.contains('/mod/book/') ||
+        textLower.contains('book') ||
+        textLower.contains('libro') ||
+        classes.contains('book')) {
+      return 'book';
+    }
+
+    // Generic link
+    if (hrefLower.startsWith('http') || hrefLower.startsWith('/')) {
+      return 'link';
+    }
+
+    return 'unknown';
   }
 }
