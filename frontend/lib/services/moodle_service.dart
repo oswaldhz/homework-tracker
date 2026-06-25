@@ -633,7 +633,6 @@ class MoodleService {
           // - Check the URL to see if we ended up on the course page (success indicator)
           final verifyResp = await _get(client, taskUrl);
           final verifyDoc = html_parser.parse(verifyResp.body);
-          final verifyBody = verifyResp.body;
           
           bool verified = false;
           
@@ -1102,77 +1101,45 @@ class MoodleService {
       await Logger.instance.log('UPLOAD: Verifying submission');
       final verifyResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
       final verifyDoc = html_parser.parse(verifyResp.body);
-      
+
       // Check for submission status indicators
       bool hasSubmission = false;
       String? submissionStatus;
       String? submittedFileName;
-      
-      final statusEl = verifyDoc.querySelector('.submissionstatustext, .submissionstatus, .assignsubmissionstatus, .status');
+      final List<Map<String, dynamic>> submissionFilesWithUrls = [];
+
+      final statusEl = verifyDoc.querySelector('[class*="submissionstatustext"], [class*="submissionstatus"], [class*="submission_status"], [data-region*="submission"] > .status');
       if (statusEl != null) {
         final statusText = statusEl.text.trim().toLowerCase();
-        await Logger.instance.log('UPLOAD: Found status element: ${statusEl.text.trim()}');
         if (statusText.contains('submitted') || statusText.contains('entregado') || statusText.contains('graded') || statusText.contains('calificado')) {
           hasSubmission = true;
           submissionStatus = statusEl.text.trim();
         }
       }
-      
-      // Check for file list in submission (real Moodle HTML)
-      final pluginLinks = verifyDoc.querySelectorAll(
-        '.fileuploadsubmission a[href*="pluginfile.php"], '
-        '.submission-files a[href*="pluginfile.php"], '
-        'li.fileuploadsubmission a[href*="pluginfile.php"], '
-        '.submissionplugin a[href*="pluginfile.php"], '
-        'a[href*="pluginfile.php"][href*="/submission_onlinetext/"], '
-        'a[href*="pluginfile.php"][href*="/submission_file/"]',
-      );
-      final List<Map<String, dynamic>> submissionFilesWithUrls = [];
-      for (final fileEl in pluginLinks) {
-        final fileName = fileEl.text.trim();
-        final fileUrl = fileEl.attributes['href'];
-        if (fileName.isNotEmpty && !fileName.contains('pluginfile') && !fileName.contains('..')) {
+
+      // Find ALL pluginfile.php links on the page (most reliable)
+      final pluginLinks = verifyDoc.querySelectorAll('a[href*="pluginfile.php"]');
+      final seenUrls = <String>{};
+      for (final link in pluginLinks) {
+        final text = link.text.trim();
+        final href = link.attributes['href'];
+        if (href == null) continue;
+        if (text.isEmpty || text.contains('pluginfile') || text.contains('/')) continue;
+        final resolved = _resolveUrl(href);
+        if (resolved.isNotEmpty && seenUrls.add(resolved)) {
           hasSubmission = true;
+          if (submittedFileName == null) submittedFileName = text.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
           submissionFilesWithUrls.add({
-            'filename': fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
-            'url': fileUrl != null ? _resolveUrl(fileUrl) : null,
+            'filename': text.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+            'url': resolved,
             'size': await File(filePath).length(),
             'uploaded_at': DateTime.now().toIso8601String(),
             'itemid': finalItemid,
           });
-          if (submittedFileName == null) {
-            submittedFileName = fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-          }
         }
       }
 
-      // If no specific-file links found, try broader selectors
-      if (submissionFilesWithUrls.isEmpty) {
-        final broadLinks = verifyDoc.querySelectorAll('.submission_received a[href*="pluginfile.php"], .submissionplugins a[href*="pluginfile.php"], a[href*="pluginfile.php"]');
-        final seenUrls = <String>{};
-        for (final fileEl in broadLinks) {
-          final fileName = fileEl.text.trim();
-          final fileUrl = fileEl.attributes['href'];
-          if (fileName.isNotEmpty && !fileName.contains('pluginfile') && !fileName.contains('..')) {
-            final resolved = fileUrl != null ? _resolveUrl(fileUrl) : null;
-            if (resolved != null && seenUrls.add(resolved)) {
-              hasSubmission = true;
-              submissionFilesWithUrls.add({
-                'filename': fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
-                'url': resolved,
-                'size': await File(filePath).length(),
-                'uploaded_at': DateTime.now().toIso8601String(),
-                'itemid': finalItemid,
-              });
-              if (submittedFileName == null) {
-                submittedFileName = fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-              }
-            }
-          }
-        }
-      }
-
-      await Logger.instance.log('UPLOAD: Verification result - hasSubmission: $hasSubmission, status: $submissionStatus');
+      await Logger.instance.log('UPLOAD: Verification result - hasSubmission: $hasSubmission, status: $submissionStatus, files: ${submissionFilesWithUrls.length}');
 
       // Update local DB with submission info
       final db = await DatabaseService.instance.database;
@@ -1262,69 +1229,53 @@ class MoodleService {
         return {'success': false, 'message': 'Invalid task URL.'};
       }
 
-      // Check assignment submission status
       final assignResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
       final assignDoc = html_parser.parse(assignResp.body);
+      final htmlLower = assignResp.body.toLowerCase();
 
       bool hasSubmission = false;
       String? submissionStatus;
       List<Map<String, dynamic>> submissionFiles = [];
 
-      // Check for submission status
-      final statusEl = assignDoc.querySelector('.submissionstatustext, .submissionstatus, .assignsubmissionstatus, .status');
+      // --- 1) Detect submission status from status text elements ---
+      final statusEl = assignDoc.querySelector('[class*="submissionstatustext"], [class*="submissionstatus"], [class*="submission_status"], [data-region*="submission"] > .status');
       if (statusEl != null) {
-        final statusText = statusEl.text.trim().toLowerCase();
-        if (statusText.contains('submitted') || statusText.contains('entregado') || statusText.contains('graded') || statusText.contains('calificado')) {
+        final st = statusEl.text.trim().toLowerCase();
+        if (st.contains('submitted') || st.contains('entregado') || st.contains('graded') || st.contains('calificado') || st.contains('for grading')) {
           hasSubmission = true;
           submissionStatus = statusEl.text.trim();
         }
       }
 
-      // Check for file list in submission (real Moodle HTML)
-      final pluginLinks = assignDoc.querySelectorAll(
-        '.fileuploadsubmission a[href*="pluginfile.php"], '
-        '.submission-files a[href*="pluginfile.php"], '
-        'li.fileuploadsubmission a[href*="pluginfile.php"], '
-        '.submissionplugin a[href*="pluginfile.php"], '
-        'a[href*="pluginfile.php"][href*="/submission_onlinetext/"], '
-        'a[href*="pluginfile.php"][href*="/submission_file/"]',
-      );
-      for (final fileEl in pluginLinks) {
-        final fileName = fileEl.text.trim();
-        final fileUrl = fileEl.attributes['href'];
-        if (fileName.isNotEmpty && !fileName.contains('pluginfile') && !fileName.contains('..')) {
+      // --- 2) Detect submission by absence of "Add submission" button ---
+      if (htmlLower.contains('action=editsubmission') || htmlLower.contains('edit submission')) {
+        hasSubmission = true;
+      }
+
+      // --- 3) Find ALL pluginfile.php links on the page (most reliable) ---
+      final pluginLinks = assignDoc.querySelectorAll('a[href*="pluginfile.php"]');
+      final seenUrls = <String>{};
+      for (final link in pluginLinks) {
+        final text = link.text.trim();
+        final href = link.attributes['href'];
+        if (href == null) continue;
+        // Skip links whose text doesn't look like a file name
+        if (text.isEmpty || text.contains('pluginfile') || text.contains('/')) continue;
+        final resolved = _resolveUrl(href);
+        if (resolved.isNotEmpty && seenUrls.add(resolved)) {
+          hasSubmission = true;
           submissionFiles.add({
-            'filename': fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
-            'url': fileUrl != null ? _resolveUrl(fileUrl) : null,
+            'filename': text.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+            'url': resolved,
             'checked_at': DateTime.now().toIso8601String(),
           });
         }
       }
 
-      // If no specific-file links found, try broader selectors
-      if (submissionFiles.isEmpty) {
-        final broadLinks = assignDoc.querySelectorAll('.submission_received a[href*="pluginfile.php"], .submissionplugins a[href*="pluginfile.php"], a[href*="pluginfile.php"]');
-        final seenUrls = <String>{};
-        for (final fileEl in broadLinks) {
-          final fileName = fileEl.text.trim();
-          final fileUrl = fileEl.attributes['href'];
-          if (fileName.isNotEmpty && !fileName.contains('pluginfile') && !fileName.contains('..')) {
-            final resolved = fileUrl != null ? _resolveUrl(fileUrl) : null;
-            if (resolved != null && seenUrls.add(resolved)) {
-              submissionFiles.add({
-                'filename': fileName.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
-                'url': resolved,
-                'checked_at': DateTime.now().toIso8601String(),
-              });
-            }
-          }
-        }
-      }
-
-      // Check for online text submission
+      // --- 4) Check for online text submission ---
       bool hasOnlineText = false;
       String? onlineTextContent;
-      for (final sel in ['.online_text', '.onlinetext', '.submission_onlinetext', '.no-overflow', '.singlesubmission']) {
+      for (final sel in ['.online_text', '.onlinetext', '.submission_onlinetext', '.no-overflow', '.singlesubmission', '[data-region*="submission-content"]']) {
         final el = assignDoc.querySelector(sel);
         if (el != null) {
           final text = el.text.trim();
@@ -1345,14 +1296,25 @@ class MoodleService {
         });
       }
 
+      // --- 5) FALLBACK: detect "Submission" heading + any text on the page ---
+      if (!hasSubmission) {
+        final subHeading = assignDoc.querySelector('h2, h3, h4, .submission-header, [data-region="submission-header"]');
+        if (subHeading != null && subHeading.text.trim().toLowerCase().contains('submission')) {
+          final nextEl = subHeading.nextElementSibling ?? subHeading.parent?.nextElementSibling;
+          if (nextEl != null && nextEl.text.trim().length > 10) {
+            hasSubmission = true;
+            submissionStatus = 'Submitted';
+          }
+        }
+      }
+
       // Check quiz grade if it's a quiz
       double? quizGrade;
       String? quizFeedback;
       if (taskUrl.contains('/mod/quiz/')) {
         final quizResp = await _get(client, '$_baseUrl/mod/quiz/report.php?id=$cmid');
         final quizDoc = html_parser.parse(quizResp.body);
-        
-        // Try to find grade
+
         final gradeEl = quizDoc.querySelector('.grade, .quiz-grade, [class*="grade"]');
         if (gradeEl != null) {
           final gradeText = gradeEl.text.trim();
@@ -1361,22 +1323,21 @@ class MoodleService {
             quizGrade = double.tryParse(gradeMatch.group(1)!);
           }
         }
-        
-        // Try to find feedback
+
         final feedbackEl = quizDoc.querySelector('.feedback, .quiz-feedback');
         if (feedbackEl != null) {
           quizFeedback = feedbackEl.text.trim();
         }
       }
 
-      // Update local DB
+      // Update / clear local DB
       final db = await DatabaseService.instance.database;
       final existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
       if (existing.isNotEmpty) {
         final updates = <String, dynamic>{
           'last_submission_check': DateTime.now().toIso8601String(),
         };
-        
+
         if (hasSubmission || submissionFiles.isNotEmpty) {
           updates['file_uploaded'] = 1;
           updates['is_submitted'] = 1;
@@ -1384,14 +1345,16 @@ class MoodleService {
           if (submissionStatus != null) {
             updates['submission_status'] = submissionStatus;
           }
+        } else {
+          // Clear stale submission data when Moodle shows no submission
+          updates['file_uploaded'] = 0;
+          updates['is_submitted'] = 0;
+          updates['submission_files'] = '[]';
+          updates['submission_status'] = null;
         }
-        
-        if (quizGrade != null) {
-          updates['quiz_grade'] = quizGrade;
-        }
-        if (quizFeedback != null) {
-          updates['quiz_feedback'] = quizFeedback;
-        }
+
+        if (quizGrade != null) updates['quiz_grade'] = quizGrade;
+        if (quizFeedback != null) updates['quiz_feedback'] = quizFeedback;
 
         await db.update('tasks', updates, where: 'url = ?', whereArgs: [taskUrl]);
       }
