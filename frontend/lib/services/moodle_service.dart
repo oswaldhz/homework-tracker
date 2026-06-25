@@ -775,44 +775,85 @@ class MoodleService {
         await Logger.instance.log('UPLOAD: Using generated itemid: $itemid');
       }
 
-      // Step 2: Discover upload repository from Moodle
+      // Step 2: Discover upload repository ID
       await Logger.instance.log('UPLOAD: Discovering upload repository');
 
-      String repoId = '';
-      final repoListUrl = '$_baseUrl/repository/repository_ajax.php?action=repositories&env=filemanager&sesskey=$sesskey&itemid=$itemid';
+      final candidateRepoIds = <String>[];
+      void _tryAddId(String id) {
+        if (id.isNotEmpty && !candidateRepoIds.contains(id)) {
+          candidateRepoIds.add(id);
+        }
+      }
+
+      // Always include upload repo (most common in default Moodle)
+      _tryAddId('0');
+
+      // Extract contextid from page for API calls
+      final ctxMatch = RegExp(r"""["']?contextid["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
+      final ctxId = ctxMatch?.group(1) ?? '';
+
+      // Strategy A: parse repository list from JavaScript config on page
       try {
+        final body = editResp.body;
+        final initMatch = RegExp(r'M\.core_filepicker\.init\([^,]+,\s*(\{[\s\S]*?\})\s*\)').firstMatch(body);
+        if (initMatch != null) {
+          final config = jsonDecode(initMatch.group(1)!);
+          final repos = config['repositories'] as List?;
+          if (repos != null) {
+            for (final r in repos) {
+              if (r is Map && r['type'] == 'upload') {
+                _tryAddId(r['id'].toString());
+                await Logger.instance.log('UPLOAD: Found upload repo from JS config: id=${r['id']}');
+              }
+            }
+          }
+        }
+      } catch (e) {
+        await Logger.instance.log('UPLOAD: JS config parse failed: $e');
+      }
+
+      // Strategy B: call repositories API
+      try {
+        final repoListUrl = '$_baseUrl/repository/repository_ajax.php'
+            '?action=repositories&sesskey=$sesskey${ctxId.isNotEmpty ? '&ctx_id=$ctxId' : ''}';
         final repoResp = await _get(client, repoListUrl);
         final repoData = jsonDecode(repoResp.body);
         if (repoData is List) {
           for (final repo in repoData) {
             if (repo['type'] == 'upload') {
-              repoId = repo['id'].toString();
-              await Logger.instance.log('UPLOAD: Found upload repository: name=${repo['name']}, id=$repoId');
-              break;
+              _tryAddId(repo['id'].toString());
+              await Logger.instance.log('UPLOAD: Found upload repo from API: name=${repo['name']}, id=${repo['id']}');
             }
           }
         }
       } catch (e) {
-        await Logger.instance.log('UPLOAD: Failed to discover repositories: $e');
+        await Logger.instance.log('UPLOAD: Repo API failed: $e');
       }
 
-      // Fallback: extract repo_id from page or use common IDs
-      if (repoId.isEmpty) {
-        final repoMatch = RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
-        if (repoMatch != null) {
-          repoId = repoMatch.group(1)!;
-          await Logger.instance.log('UPLOAD: Fallback repo_id from regex: $repoId');
-        } else {
-          final repoInput = editDoc.querySelector('input[name="repo_id"], select[name="repo_id"]');
-          if (repoInput != null) {
-            final val = repoInput.attributes['value'];
-            if (val != null && val.isNotEmpty) {
-              repoId = val;
-              await Logger.instance.log('UPLOAD: Fallback repo_id from input: $repoId');
-            }
+      // Strategy C: extract repo_id from page HTML
+      try {
+        final pageMatch =
+            RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
+        if (pageMatch != null) {
+          _tryAddId(pageMatch.group(1)!);
+          await Logger.instance.log('UPLOAD: Found repo_id from page regex: ${pageMatch.group(1)}');
+        }
+        final repoInput = editDoc.querySelector('input[name="repo_id"], select[name="repo_id"]');
+        if (repoInput != null) {
+          final val = repoInput.attributes['value'];
+          if (val != null && val.isNotEmpty) {
+            _tryAddId(val);
+            await Logger.instance.log('UPLOAD: Found repo_id from input: $val');
           }
         }
+      } catch (_) {}
+
+      // Strategy D: common fallback IDs (not already added)
+      for (final id in ['1', '2', '3', '4', '5', '6', '7']) {
+        _tryAddId(id);
       }
+
+      await Logger.instance.log('UPLOAD: Candidate repo_ids: $candidateRepoIds');
 
       // Step 3: Upload file to Moodle draft area (repository)
       await Logger.instance.log('UPLOAD: Uploading file to draft area');
@@ -867,40 +908,37 @@ class MoodleService {
         return {};
       }
 
-      final uploadResult = await _tryUpload(repoId);
-      int? uploadedItemid = uploadResult['itemid'] as int?;
-      String? uploadedFilename = uploadResult['filename'] as String?;
+      int? uploadedItemid;
+      String? uploadedFilename;
+      String lastError = '';
+      String usedRepoId = '';
 
-      // Retry with common repo_ids if first attempt failed
-      if (uploadedItemid == null && uploadedFilename == null) {
-        final fallbackIds = ['3', '5', '2', '1', '6', '7'];
-        for (final rid in fallbackIds) {
-          if (rid == repoId) continue;
-          await Logger.instance.log('UPLOAD: Retrying with fallback repo_id=$rid');
-          final altResult = await _tryUpload(rid);
-          uploadedItemid = altResult['itemid'] as int?;
-          uploadedFilename = altResult['filename'] as String?;
-          if (uploadedItemid != null || uploadedFilename != null) {
-            repoId = rid;
-            break;
-          }
+      for (final rid in candidateRepoIds) {
+        final result = await _tryUpload(rid);
+        uploadedItemid = result['itemid'] as int?;
+        uploadedFilename = result['filename'] as String?;
+        lastError = result['error'] as String? ?? '';
+        if (uploadedItemid != null || uploadedFilename != null) {
+          usedRepoId = rid;
+          await Logger.instance.log('UPLOAD: Success with repo_id=$rid');
+          break;
         }
+        await Logger.instance.log('UPLOAD: Failed repo_id=$rid');
       }
 
       if (uploadedItemid == null && uploadedFilename == null) {
-        final errMsg = uploadResult['error'] as String?;
-        await Logger.instance.log('UPLOAD: All repo_ids failed. Last error: $errMsg');
+        await Logger.instance.log('UPLOAD: All repo_ids failed. Last error: $lastError');
         return {
           'success': false,
           'open_in_browser': true,
           'url': taskUrl,
-          'message': 'File upload to draft area failed${errMsg != null ? ': $errMsg' : ''}. Please try in your browser.',
-          'debug': errMsg ?? '',
+          'message': 'File upload to draft area failed${lastError.isNotEmpty ? ': $lastError' : ''}. Please try in your browser.',
+          'debug': lastError,
         };
       }
 
       final finalItemid = uploadedItemid ?? itemid;
-      await Logger.instance.log('UPLOAD: Using final itemid: $finalItemid, repo_id=$repoId');
+      await Logger.instance.log('UPLOAD: Using final itemid: $finalItemid, repo_id=$usedRepoId');
 
       // Step 3: Submit the assignment with the uploaded file reference
       await Logger.instance.log('UPLOAD: Submitting assignment with savesubmission');
