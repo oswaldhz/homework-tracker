@@ -112,8 +112,7 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no extra
   "study_tips": "Practical advice to complete this task",
   "article_suggestions": [
     {
-      "title": "Article title",
-      "url": "https://...",
+      "title": "Article title that works as a search query",
       "description": "Brief description",
       "source": "Website name"
     }
@@ -125,10 +124,11 @@ Requirements:
 - Use Google Search to find 3-5 real YouTube video IDs about this topic. Extract actual video IDs from real search results. Do NOT make up video IDs.
 - 3-5 key concepts with brief explanations
 - Practical study tips
-- 2-3 article suggestions from educational websites (W3Schools, MDN, GeeksforGeeks, etc.)
-- All article URLs MUST be real, existing pages
+- 2-3 article suggestions with descriptive titles that will be used for Google search
 
 CRITICAL: youtube_videos array must contain REAL video IDs. Use Google Search to find them. Each must be an 11-character YouTube video ID.
+
+Do NOT include 'url' fields in article_suggestions — they will be ignored. Focus on writing clear, searchable article titles.
 
 Return ONLY the JSON object.''';
 
@@ -159,6 +159,7 @@ Return ONLY the JSON object.''';
       responseText = responseText.replaceAll(RegExp(r'^```(json)?\s*'), '').replaceAll(RegExp(r'\s*```$'), '').trim();
 
       final aiData = jsonDecode(responseText);
+      final searchQueries = List<String>.from(aiData['search_queries'] ?? []);
 
       // 1. Collect AI-suggested YouTube videos (from Gemini's Google Search)
       final aiSuggestedVideos = <Map<String, dynamic>>[];
@@ -178,7 +179,6 @@ Return ONLY the JSON object.''';
       }
 
       // 2. Search YouTube via web scraping for each query
-      final searchQueries = List<String>.from(aiData['search_queries'] ?? []);
       final scrapedVideos = <Map<String, dynamic>>[];
 
       for (final query in searchQueries.take(3)) {
@@ -193,14 +193,12 @@ Return ONLY the JSON object.''';
       // 3. Merge AI-suggested + scraped, deduplicate
       final seenIds = <String>{};
       final allVideos = <Map<String, dynamic>>[];
-      
-      // AI-suggested videos first (most reliable)
+
       for (final v in aiSuggestedVideos) {
         if (seenIds.add(v['video_id'])) {
           allVideos.add(v);
         }
       }
-      // Scraped videos as supplement
       for (final v in scrapedVideos) {
         if (seenIds.add(v['video_id'])) {
           allVideos.add(v);
@@ -231,29 +229,19 @@ Return ONLY the JSON object.''';
         }
       }
 
+      // 4. Articles: always generate search links — never hallucinate URLs
       final articleSuggestions = List<Map<String, dynamic>>.from(aiData['article_suggestions'] ?? []);
-      final articleUrls = articleSuggestions
-          .map((a) => a['url']?.toString() ?? '')
-          .where((String u) => u.isNotEmpty)
-          .toList();
-      final validArticleUrls = <String>{};
-      for (final url in articleUrls) {
-        if (await _verifyUrl(url)) {
-          validArticleUrls.add(url);
-        }
-      }
-
       final articles = <Map<String, dynamic>>[];
       for (final a in articleSuggestions) {
-        if (validArticleUrls.contains(a['url'])) {
-          articles.add({
-            'title': a['title'] ?? 'Article',
-            'url': a['url'],
-            'description': a['description'] ?? '',
-            'source': a['source'] ?? '',
-          });
-          if (articles.length >= 5) break;
-        }
+        final title = a['title']?.toString() ?? '';
+        if (title.isEmpty) continue;
+        articles.add({
+          'title': title,
+          'url': 'https://www.google.com/search?q=${Uri.encodeComponent(title)}',
+          'description': a['description']?.toString() ?? '',
+          'source': a['source']?.toString() ?? 'Google Search',
+        });
+        if (articles.length >= 5) break;
       }
 
       // Combine Moodle resources with AI-generated content
@@ -308,15 +296,6 @@ Return ONLY the JSON object.''';
   }) async {
     try {
       final resources = <Map<String, dynamic>>[];
-      
-      // This would need to be implemented in moodle_service.dart
-      // For now, return empty list
-      // In a real implementation, you would:
-      // 1. Login to Moodle
-      // 2. Navigate to the course page
-      // 3. Scrape all resources (books, PDFs, videos, links)
-      // 4. Return them as a list
-      
       return resources;
     } catch (e) {
       return [];
@@ -400,30 +379,6 @@ Return ONLY the JSON object.''';
       return videos;
     } catch (e) {
       return [];
-    }
-  }
-
-  Future<bool> _verifyYouTubeVideo(String url) async {
-    final videoIdMatch = RegExp(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})').firstMatch(url);
-    return videoIdMatch != null;
-  }
-
-  Future<bool> _verifyUrl(String url) async {
-    if (url.isEmpty || !url.startsWith('http')) return false;
-    try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      );
-      if (response.statusCode == 404) return false;
-      if (response.statusCode != 200) return false;
-      if (response.body.length < 1000) return false;
-      return true;
-    } catch (e) {
-      return false;
     }
   }
 }
