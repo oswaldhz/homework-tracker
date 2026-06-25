@@ -276,80 +276,135 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 32),
                   if (_savedCredentials.isNotEmpty) ...[
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Saved Accounts',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
                         ),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: _selectedCredentialId,
-                          decoration: InputDecoration(
-                            labelText: 'Select saved account',
-                            prefixIcon: const Icon(Icons.account_circle),
-                            border: const OutlineInputBorder(),
-                            suffixIcon: _selectedCredentialId != null
-                                ? IconButton(
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed: () {
-                                      final id = int.tryParse(_selectedCredentialId!);
-                                      if (id != null) _deleteSavedCredential(id);
-                                      setState(() {
-                                        _selectedCredentialId = null;
-                                        _urlController.clear();
-                                        _usernameController.clear();
-                                        _passwordController.clear();
-                                      });
-                                    },
-                                    tooltip: 'Forget this account',
-                                  )
-                                : null,
-                          ),
-                          items: _savedCredentials.map((cred) {
-                            final url = cred['moodle_url'] as String;
-                            final username = cred['encrypted_username'] as String;
-                            return DropdownMenuItem<String>(
-                              value: cred['id'].toString(),
-                              child: Text(
-                                '$username @ $url',
-                                overflow: TextOverflow.ellipsis,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.account_circle,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 20,
                               ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            final cred = _savedCredentials.firstWhere((c) => c['id'].toString() == value);
-                            _selectSavedCredential(cred);
-                          },
+                              const SizedBox(width: 8),
+                              Text(
+                                'Saved Accounts',
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            value: _selectedCredentialId,
+                            decoration: InputDecoration(
+                              labelText: 'Select account to login',
+                              hintText: 'Choose a saved account',
+                              prefixIcon: const Icon(Icons.person_outline),
+                              border: const OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Theme.of(context).colorScheme.surface,
+                              suffixIcon: _selectedCredentialId != null
+                                  ? IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                      onPressed: () {
+                                        final id = int.tryParse(_selectedCredentialId!);
+                                        if (id != null) _deleteSavedCredential(id);
+                                        setState(() {
+                                          _selectedCredentialId = null;
+                                          _urlController.clear();
+                                          _usernameController.clear();
+                                          _passwordController.clear();
+                                        });
+                                      },
+                                      tooltip: 'Forget this account',
+                                    )
+                                  : null,
+                            ),
+                            items: _savedCredentials.map((cred) {
+                              final url = cred['moodle_url'] as String;
+                              final username = cred['encrypted_username'] as String;
+                              return DropdownMenuItem<String>(
+                                value: cred['id'].toString(),
+                                child: Text(
+                                  '$username @ $url',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              final cred = _savedCredentials.firstWhere((c) => c['id'].toString() == value);
+                              _selectSavedCredential(cred);
+                            },
+                          ),
+                          if (_selectedCredentialId != null) ...[
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: api.loading ? null : _handleLogin,
+                              icon: api.loading
+                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.login),
+                              label: Text(api.loading ? 'Connecting...' : 'Quick Login'),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'or enter new credentials',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 16),
+                        Expanded(child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
                       ],
                     ),
+                    const SizedBox(height: 24),
                   ],
                   if (_ssoDetected) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
+                        color: Colors.blue.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
                           Icon(
-                            Icons.info_outline,
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            Icons.cloud,
+                            color: Colors.blue,
+                            size: 20,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'This Moodle site supports Office 365 login. If your normal username/password does not work, use the Office 365 button below.',
+                              'Office 365 login detected. If your normal credentials don\'t work, use the Office 365 button below.',
                               style: TextStyle(
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                color: Colors.blue.shade700,
+                                fontSize: 13,
                               ),
                             ),
                           ),
@@ -361,7 +416,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextFormField(
                     controller: _urlController,
                     onChanged: (value) {
-                      // Clear SSO detection when URL changes significantly
                       if (_ssoDetected) {
                         setState(() => _ssoUrl = null);
                       }
@@ -373,6 +427,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       hintText: 'https://your-school.moodle.com',
                       prefixIcon: const Icon(Icons.link),
                       border: const OutlineInputBorder(),
+                      helperText: 'Your school\'s Moodle website address',
                       suffixIcon: _checkingSso
                           ? const SizedBox(
                               width: 18,
@@ -401,6 +456,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _usernameController,
                     decoration: const InputDecoration(
                       labelText: 'Username',
+                      hintText: 'Your Moodle username',
                       prefixIcon: Icon(Icons.person),
                       border: OutlineInputBorder(),
                     ),
@@ -415,6 +471,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       labelText: 'Password',
+                      hintText: 'Your Moodle password',
                       prefixIcon: const Icon(Icons.lock),
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
@@ -429,25 +486,61 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
-                    Text(
-                      _error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                      textAlign: TextAlign.center,
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Theme.of(context).colorScheme.error.withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 13,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _rememberMe,
-                        onChanged: (value) {
-                          setState(() {
-                            _rememberMe = value ?? false;
-                          });
-                        },
-                      ),
-                      const Text('Remember me'),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: _rememberMe,
+                          onChanged: (value) {
+                            setState(() {
+                              _rememberMe = value ?? false;
+                            });
+                          },
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Remember me',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                'Save credentials for quick login next time',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 24),
                   FilledButton.icon(

@@ -160,7 +160,11 @@ Return ONLY the JSON object.''';
         }
       }
 
-      final articleUrls = List<String>.from((aiData['article_suggestions'] ?? []).map((a) => a['url'] ?? '').where((u) => u.isNotEmpty));
+      final articleSuggestions = List<Map<String, dynamic>>.from(aiData['article_suggestions'] ?? []);
+      final articleUrls = articleSuggestions
+          .map((a) => a['url']?.toString() ?? '')
+          .where((String u) => u.isNotEmpty)
+          .toList();
       final validArticleUrls = <String>{};
       for (final url in articleUrls) {
         if (await _verifyUrl(url)) {
@@ -169,7 +173,7 @@ Return ONLY the JSON object.''';
       }
 
       final articles = <Map<String, dynamic>>[];
-      for (final a in List<Map<String, dynamic>>.from(aiData['article_suggestions'] ?? [])) {
+      for (final a in articleSuggestions) {
         if (validArticleUrls.contains(a['url'])) {
           articles.add({
             'title': a['title'] ?? 'Article',

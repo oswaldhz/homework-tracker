@@ -638,6 +638,8 @@ class MoodleService {
   }) async {
     final client = _createClient();
     try {
+      await Logger.instance.log('UPLOAD: Starting upload for $taskUrl');
+      
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
         await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
       } else {
@@ -647,18 +649,22 @@ class MoodleService {
       final uri = Uri.parse(taskUrl);
       final cmid = uri.queryParameters['id'];
       if (cmid == null) {
+        await Logger.instance.log('UPLOAD: Invalid task URL - no cmid');
         return {'success': false, 'open_in_browser': true, 'url': taskUrl, 'message': 'Invalid task URL.'};
       }
 
       // Step 1: Get edit submission page to extract form fields and current itemid
       final editUrl = '$_baseUrl/mod/assign/view.php?id=$cmid&action=editsubmission';
+      await Logger.instance.log('UPLOAD: Fetching edit page: $editUrl');
       final editResp = await _get(client, editUrl);
       final editDoc = html_parser.parse(editResp.body);
 
       final sesskey = _extractSesskey(editResp.body);
       if (sesskey == null) {
-        return {'success': false, 'open_in_browser': true, 'url': taskUrl, 'message': 'Open in your browser to upload files'};
+        await Logger.instance.log('UPLOAD: Could not find sesskey');
+        return {'success': false, 'open_in_browser': true, 'url': taskUrl, 'message': 'Could not find session key. Please upload in your browser.'};
       }
+      await Logger.instance.log('UPLOAD: Found sesskey: $sesskey');
 
       // Extract itemid from the file manager form
       int? itemid;
@@ -667,6 +673,7 @@ class MoodleService {
         final itemidInput = fileManagerForm.querySelector('input[name="itemid"]');
         if (itemidInput != null) {
           itemid = int.tryParse(itemidInput.attributes['value'] ?? '');
+          await Logger.instance.log('UPLOAD: Found itemid from form: $itemid');
         }
       }
 
@@ -675,15 +682,18 @@ class MoodleService {
         final itemidMatch = RegExp("itemid[\"']?\\s*[:=]\\s*[\"']?(\\d+)").firstMatch(editResp.body);
         if (itemidMatch != null) {
           itemid = int.tryParse(itemidMatch.group(1)!);
+          await Logger.instance.log('UPLOAD: Found itemid from regex: $itemid');
         }
       }
 
       // Fallback: try to get itemid from the draft file area
       if (itemid == null) {
-        itemid = DateTime.now().millisecondsSinceEpoch ~/ 1000; // Generate a unique itemid
+        itemid = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        await Logger.instance.log('UPLOAD: Using generated itemid: $itemid');
       }
 
       // Step 2: Upload file to Moodle draft area (repository)
+      await Logger.instance.log('UPLOAD: Uploading file to draft area');
       final file = await http.MultipartFile.fromPath('repo_upload_file', filePath);
       final uploadRequest = http.MultipartRequest('POST', Uri.parse('$_baseUrl/repository/repository_ajax.php?action=upload'))
         ..headers.addAll({..._headers(), 'Accept': 'application/json'})
@@ -697,6 +707,9 @@ class MoodleService {
       final uploadStream = await client.send(uploadRequest).timeout(_requestTimeout);
       final uploadResp = await http.Response.fromStream(uploadStream);
       _parseCookies(uploadResp);
+      
+      await Logger.instance.log('UPLOAD: Draft upload response status: ${uploadResp.statusCode}');
+      await Logger.instance.log('UPLOAD: Draft upload response body: ${uploadResp.body.substring(0, uploadResp.body.length.clamp(0, 500))}');
 
       // Parse upload response to get the file info (including updated itemid)
       int? uploadedItemid;
@@ -707,16 +720,27 @@ class MoodleService {
           final firstFile = uploadData[0];
           uploadedItemid = firstFile['itemid'] as int?;
           uploadedFilename = firstFile['filename'] as String?;
+          await Logger.instance.log('UPLOAD: Parsed from list - itemid: $uploadedItemid, filename: $uploadedFilename');
         } else if (uploadData is Map) {
           uploadedItemid = uploadData['itemid'] as int?;
           uploadedFilename = uploadData['filename'] as String?;
+          await Logger.instance.log('UPLOAD: Parsed from map - itemid: $uploadedItemid, filename: $uploadedFilename');
         }
-      } catch (_) {}
+      } catch (e) {
+        await Logger.instance.log('UPLOAD: Failed to parse upload response: $e');
+      }
+
+      if (uploadedItemid == null && uploadedFilename == null) {
+        await Logger.instance.log('UPLOAD: Draft upload failed - no itemid or filename returned');
+        return {'success': false, 'open_in_browser': true, 'url': taskUrl, 'message': 'File upload to draft area failed. Please try in your browser.'};
+      }
 
       final finalItemid = uploadedItemid ?? itemid;
+      await Logger.instance.log('UPLOAD: Using final itemid: $finalItemid');
 
       // Step 3: Submit the assignment with the uploaded file reference
-      await client.post(
+      await Logger.instance.log('UPLOAD: Submitting assignment with savesubmission');
+      final submitResp = await client.post(
         Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid&action=savesubmission'),
         headers: _headers(),
         body: {
@@ -726,9 +750,13 @@ class MoodleService {
           'submitbutton': 'Save changes',
         },
       ).timeout(_requestTimeout);
+      
+      await Logger.instance.log('UPLOAD: Savesubmission response status: ${submitResp.statusCode}');
+      await Logger.instance.log('UPLOAD: Savesubmission response body: ${submitResp.body.substring(0, submitResp.body.length.clamp(0, 500))}');
 
       // Step 4: Verify submission by checking the assignment page
       await Future.delayed(const Duration(milliseconds: 500));
+      await Logger.instance.log('UPLOAD: Verifying submission');
       final verifyResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
       final verifyDoc = html_parser.parse(verifyResp.body);
       
@@ -740,6 +768,7 @@ class MoodleService {
       final statusEl = verifyDoc.querySelector('.submissionstatustext, .submissionstatus, .assignsubmissionstatus, .status');
       if (statusEl != null) {
         final statusText = statusEl.text.trim().toLowerCase();
+        await Logger.instance.log('UPLOAD: Found status element: ${statusEl.text.trim()}');
         if (statusText.contains('submitted') || statusText.contains('entregado') || statusText.contains('graded') || statusText.contains('calificado')) {
           hasSubmission = true;
           submissionStatus = statusEl.text.trim();
@@ -751,7 +780,10 @@ class MoodleService {
       if (fileList.isNotEmpty) {
         hasSubmission = true;
         submittedFileName = fileList.first.text.trim();
+        await Logger.instance.log('UPLOAD: Found file in submission: $submittedFileName');
       }
+
+      await Logger.instance.log('UPLOAD: Verification result - hasSubmission: $hasSubmission, status: $submissionStatus');
 
       // Update local DB with submission info
       final db = await DatabaseService.instance.database;
@@ -779,11 +811,12 @@ class MoodleService {
 
       return {
         'success': true, 
-        'message': 'File uploaded and submission saved',
+        'message': hasSubmission ? 'File uploaded and submission saved' : 'File uploaded (submission may need verification)',
         'filename': uploadedFilename ?? filePath.split('/').last,
         'verified': hasSubmission,
       };
     } catch (e) {
+      await Logger.instance.log('UPLOAD: Exception: $e');
       return {'success': false, 'open_in_browser': true, 'url': taskUrl, 'message': 'Upload failed: $e'};
     } finally {
       client.close();
