@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/task.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
+import '../services/database_service.dart';
+import '../services/moodle_service.dart';
 
 class FileUploadScreen extends StatefulWidget {
   final Task task;
@@ -17,11 +20,61 @@ class FileUploadScreen extends StatefulWidget {
 class _FileUploadScreenState extends State<FileUploadScreen> {
   PlatformFile? _selectedFile;
   bool _uploading = false;
+  bool _syncing = false;
   String? _statusMessage;
   bool _uploadSuccess = false;
   bool _openInBrowser = false;
   String? _browserUrl;
   String? _uploadedFileUrl;
+  Task _task = Task(
+    id: 0,
+    title: '',
+    courseName: '',
+    status: '',
+    isCompleted: false,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _task = widget.task;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoSyncSubmission());
+  }
+
+  Future<void> _autoSyncSubmission() async {
+    if (_task.url == null) return;
+    if (_task.lastSubmissionCheck != null &&
+        DateTime.now().difference(_task.lastSubmissionCheck!).inMinutes < 5) return;
+
+    setState(() => _syncing = true);
+
+    try {
+      final cred = await DatabaseService.instance.getCredentials();
+      if (cred == null) return;
+
+      final username = await AuthService.instance.decrypt(cred['encrypted_username'] as String);
+      final password = await AuthService.instance.decrypt(cred['encrypted_password'] as String);
+      final loginType = cred['login_type'] as String? ?? 'moodle';
+      final sessionCookie = loginType == 'office365' ? password : null;
+
+      await MoodleService.instance.checkSubmissionStatus(
+        cred['moodle_url'] as String,
+        username,
+        password,
+        _task.url!,
+        sessionCookie: sessionCookie,
+      );
+
+      final fresh = await DatabaseService.instance.getTask(widget.task.id);
+      if (fresh != null && mounted) {
+        setState(() => _task = Task.fromJson(fresh));
+      }
+    } catch (_) {
+      // Silent — sync is just a convenience, not required
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -94,14 +147,14 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.task.title,
+                      _task.title,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      widget.task.courseName,
+                      _task.courseName,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.primary,
                       ),
@@ -112,7 +165,7 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                         Icon(Icons.calendar_today, size: 16, color: theme.colorScheme.onSurfaceVariant),
                         const SizedBox(width: 4),
                         Text(
-                          widget.task.dueDateFormatted,
+                          _task.dueDateFormatted,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -123,7 +176,12 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                 ),
               ),
             ),
-            if (widget.task.submissionFiles.isNotEmpty) ...[
+            if (_syncing)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            if (_task.submissionFiles.isNotEmpty) ...[
               const SizedBox(height: 24),
               Card(
                 child: Padding(
@@ -142,7 +200,7 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      ...widget.task.submissionFiles.map((file) => _buildUploadedFileCard(context, file)),
+                      ..._task.submissionFiles.map((file) => _buildUploadedFileCard(context, file)),
                     ],
                   ),
                 ),
