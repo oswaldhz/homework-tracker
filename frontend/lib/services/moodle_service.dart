@@ -1231,14 +1231,13 @@ class MoodleService {
 
       final assignResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
       final assignDoc = html_parser.parse(assignResp.body);
-      final htmlLower = assignResp.body.toLowerCase();
 
       bool hasSubmission = false;
       String? submissionStatus;
       List<Map<String, dynamic>> submissionFiles = [];
 
       // --- 1) Detect submission status from status text elements ---
-      final statusEl = assignDoc.querySelector('[class*="submissionstatustext"], [class*="submissionstatus"], [class*="submission_status"], [data-region*="submission"] > .status');
+      final statusEl = assignDoc.querySelector('[class*="submissionstatustext"], [class*="submissionstatus"], [class*="submission_status"], [data-region*="submission-status"]');
       if (statusEl != null) {
         final st = statusEl.text.trim().toLowerCase();
         if (st.contains('submitted') || st.contains('entregado') || st.contains('graded') || st.contains('calificado') || st.contains('for grading')) {
@@ -1247,9 +1246,16 @@ class MoodleService {
         }
       }
 
-      // --- 2) Detect submission by absence of "Add submission" button ---
-      if (htmlLower.contains('action=editsubmission') || htmlLower.contains('edit submission')) {
-        hasSubmission = true;
+      // --- 2) Check for "Edit submission" button (proves there IS a submission) ---
+      final editBtns = assignDoc.querySelectorAll('input[value="Edit submission"], a[href*="action=editsubmission"]');
+      for (final btn in editBtns) {
+        final btnText = btn.text.trim().toLowerCase();
+        final btnVal = btn.attributes['value']?.toLowerCase() ?? '';
+        if (btnText.contains('edit submission') || btnVal.contains('edit submission')) {
+          hasSubmission = true;
+          if (submissionStatus == null) submissionStatus = 'Submitted';
+          break;
+        }
       }
 
       // --- 3) Find ALL pluginfile.php links on the page (most reliable) ---
