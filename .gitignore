@@ -71,3 +71,5 @@ frontend/pubspec.lock
 # Logs
 *.log
 logs/
+
+backend/ddg_debug.html
