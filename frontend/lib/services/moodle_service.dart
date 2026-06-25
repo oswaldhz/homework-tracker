@@ -1117,25 +1117,72 @@ class MoodleService {
         }
       }
 
-      // Find ALL pluginfile.php links on the page (most reliable)
-      final pluginLinks = verifyDoc.querySelectorAll('a[href*="pluginfile.php"]');
+      // Find ALL pluginfile.php links on the page and extract filenames
+      final pluginLinks = verifyDoc.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
       final seenUrls = <String>{};
       for (final link in pluginLinks) {
-        final text = link.text.trim();
         final href = link.attributes['href'];
         if (href == null) continue;
-        if (text.isEmpty || text.contains('pluginfile') || text.contains('/')) continue;
+
+        // Try to extract filename: (a) link text, (b) parent li/div text, (c) URL basename
+        String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+        if (filename.isEmpty || filename == 'Download' || filename == 'download') {
+          final parent = link.parent;
+          if (parent != null) {
+            final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+            if (siblingText.length > 1 && siblingText.length < 200) {
+              filename = siblingText;
+            }
+          }
+        }
+
+        if (filename.isEmpty || filename.length > 200) {
+          final segments = href.split('/');
+          filename = Uri.decodeComponent(segments.lastWhere((s) => s.contains('.'), orElse: () => segments.last));
+        }
+
         final resolved = _resolveUrl(href);
         if (resolved.isNotEmpty && seenUrls.add(resolved)) {
           hasSubmission = true;
-          if (submittedFileName == null) submittedFileName = text.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+          if (submittedFileName == null) submittedFileName = filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
           submissionFilesWithUrls.add({
-            'filename': text.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+            'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
             'url': resolved,
             'size': await File(filePath).length(),
             'uploaded_at': DateTime.now().toIso8601String(),
             'itemid': finalItemid,
           });
+        }
+      }
+
+      // Fallback: look in submission-specific regions
+      if (submissionFilesWithUrls.isEmpty) {
+        final subRegions = verifyDoc.querySelectorAll('[data-region*="submission"], .submission-received-files, .submissionplugins, .fileuploadsubmission, ul.submission-files');
+        for (final region in subRegions) {
+          final links = region.querySelectorAll('a');
+          for (final link in links) {
+            final href = link.attributes['href'] ?? '';
+            if (!href.contains('pluginfile.php') && !href.contains('draftfile.php')) continue;
+            if (seenUrls.contains(_resolveUrl(href))) continue;
+            String name = link.text.trim();
+            if (name.isEmpty || name.length > 200) {
+              name = Uri.decodeComponent(href.split('/').last);
+            }
+            hasSubmission = true;
+            if (submittedFileName == null) submittedFileName = name.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+            seenUrls.add(_resolveUrl(href));
+            submissionFilesWithUrls.add({
+              'filename': name.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+              'url': _resolveUrl(href),
+              'size': await File(filePath).length(),
+              'uploaded_at': DateTime.now().toIso8601String(),
+              'itemid': finalItemid,
+            });
+          }
+        }
+        if (submissionFilesWithUrls.isEmpty && hasSubmission) {
+          await Logger.instance.log('UPLOAD VERIFY DEBUG: No files found. HTML: ${verifyResp.body.substring(0, verifyResp.body.length.clamp(0, 3000))}');
         }
       }
 
@@ -1258,23 +1305,70 @@ class MoodleService {
         }
       }
 
-      // --- 3) Find ALL pluginfile.php links on the page (most reliable) ---
-      final pluginLinks = assignDoc.querySelectorAll('a[href*="pluginfile.php"]');
+      // --- 3) Find ALL pluginfile.php links on the page and extract filenames ---
+      final pluginLinks = assignDoc.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
       final seenUrls = <String>{};
       for (final link in pluginLinks) {
-        final text = link.text.trim();
         final href = link.attributes['href'];
         if (href == null) continue;
-        // Skip links whose text doesn't look like a file name
-        if (text.isEmpty || text.contains('pluginfile') || text.contains('/')) continue;
+
+        // Try to extract filename: (a) link text, (b) parent li/div text, (c) URL basename
+        String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+        // If empty, check nearby elements (sibling spans, parent li, etc.)
+        if (filename.isEmpty || filename == 'Download' || filename == 'download') {
+          final parent = link.parent;
+          if (parent != null) {
+            final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+            if (siblingText.length > 1 && siblingText.length < 200) {
+              filename = siblingText;
+            }
+          }
+        }
+
+        // Fall back to URL basename (last path segment)
+        if (filename.isEmpty || filename.length > 200) {
+          final segments = href.split('/');
+          filename = Uri.decodeComponent(segments.lastWhere((s) => s.contains('.'), orElse: () => segments.last));
+        }
+
         final resolved = _resolveUrl(href);
         if (resolved.isNotEmpty && seenUrls.add(resolved)) {
           hasSubmission = true;
           submissionFiles.add({
-            'filename': text.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+            'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
             'url': resolved,
             'checked_at': DateTime.now().toIso8601String(),
           });
+        }
+      }
+
+      // Also check for file entries with a download icon or list structure
+      if (submissionFiles.isEmpty) {
+        // Look in submission-specific regions
+        final subRegions = assignDoc.querySelectorAll('[data-region*="submission"], .submission-received-files, .submissionplugins, .fileuploadsubmission, ul.submission-files');
+        for (final region in subRegions) {
+          final links = region.querySelectorAll('a');
+          for (final link in links) {
+            final href = link.attributes['href'] ?? '';
+            if (!href.contains('pluginfile.php') && !href.contains('draftfile.php')) continue;
+            if (seenUrls.contains(_resolveUrl(href))) continue;
+            String name = link.text.trim();
+            if (name.isEmpty || name.length > 200) {
+              name = Uri.decodeComponent(href.split('/').last);
+            }
+            hasSubmission = true;
+            seenUrls.add(_resolveUrl(href));
+            submissionFiles.add({
+              'filename': name.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+              'url': _resolveUrl(href),
+              'checked_at': DateTime.now().toIso8601String(),
+            });
+          }
+        }
+        // Log the HTML for debugging if still no files
+        if (submissionFiles.isEmpty && hasSubmission) {
+          await Logger.instance.log('SYNC DEBUG: No files found on assignment page. HTML snippet: ${assignResp.body.substring(0, assignResp.body.length.clamp(0, 3000))}');
         }
       }
 

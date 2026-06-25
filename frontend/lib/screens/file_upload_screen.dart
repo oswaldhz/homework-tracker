@@ -205,8 +205,46 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                           ),
                         ],
                       ),
+                      if (_task.submissionStatus != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          _task.submissionStatus!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.green.shade700,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       ..._task.submissionFiles.map((file) => _buildUploadedFileCard(context, file)),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _task.url != null
+                                  ? () => launchUrl(Uri.parse(_task.url!), mode: LaunchMode.externalApplication)
+                                  : null,
+                              icon: const Icon(Icons.edit, size: 18),
+                              label: const Text('Edit Submission'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _task.url != null
+                                  ? () => launchUrl(Uri.parse(_task.url!), mode: LaunchMode.externalApplication)
+                                  : null,
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              label: const Text('Delete Submission'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red.shade700,
+                                side: BorderSide(color: Colors.red.shade300),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
