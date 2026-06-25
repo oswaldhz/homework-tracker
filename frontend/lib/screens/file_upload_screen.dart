@@ -21,6 +21,7 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
   bool _uploadSuccess = false;
   bool _openInBrowser = false;
   String? _browserUrl;
+  String? _uploadedFileUrl;
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -54,10 +55,12 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
       final api = context.read<ApiService>();
       final result = await api.uploadFile(widget.task.id, _selectedFile!.path!);
 
+      final fileUrl = result['file_url'] as String?;
       setState(() {
         _uploadSuccess = result['success'] == true;
         _openInBrowser = result['open_in_browser'] == true;
         _browserUrl = result['url'] ?? widget.task.url;
+        _uploadedFileUrl = fileUrl;
         _statusMessage = result['message'] ?? (_uploadSuccess ? 'File uploaded successfully!' : 'Upload failed');
       });
     } catch (e) {
@@ -297,7 +300,14 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: () => Navigator.pop(context, true),
+                            onPressed: () {
+                              final url = _uploadedFileUrl ?? _browserUrl;
+                              if (url != null) {
+                                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                              } else {
+                                Navigator.pop(context, true);
+                              }
+                            },
                             icon: const Icon(Icons.visibility),
                             label: const Text('View Uploaded File'),
                           ),

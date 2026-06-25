@@ -55,6 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final savedLoginType = prefs.getString('login_type') ?? 'moodle';
       final rememberMe = prefs.getBool('remember_me') ?? false;
 
+      bool shouldAutoLogin = false;
       setState(() {
         _savedCredentials = savedCredentials;
         _rememberMe = rememberMe;
@@ -64,7 +65,18 @@ class _LoginScreenState extends State<LoginScreen> {
           _passwordController.text = savedPassword;
         }
         _loadingSavedCredentials = false;
+        if (rememberMe && savedUrl != null && savedUsername != null && savedPassword != null && savedPassword.isNotEmpty) {
+          shouldAutoLogin = true;
+        }
       });
+
+      if (shouldAutoLogin) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (mounted) {
+          await _handleLogin();
+          return;
+        }
+      }
 
       final checkUrl = savedUrl ?? (_savedCredentials.isNotEmpty ? _savedCredentials.first['moodle_url'] as String? : null);
       if (checkUrl != null && checkUrl.isNotEmpty) {

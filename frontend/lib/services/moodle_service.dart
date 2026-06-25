@@ -944,9 +944,16 @@ class MoodleService {
         return text;
       }
 
+      bool isFileExistsEvent(dynamic data) {
+        final payload = data is List && data.isNotEmpty ? data.first : data;
+        return payload is Map && payload['event'] == 'fileexists';
+      }
+
       Map<String, dynamic>? parseUploadSuccess(dynamic data) {
         final payload = data is List && data.isNotEmpty ? data.first : data;
         if (payload is! Map) return null;
+
+        if (payload['event'] == 'fileexists') return null;
 
         final itemIdFromResponse = asInt(payload['itemid'] ?? payload['id']);
         final filenameFromResponse = asNonEmptyString(payload['filename'] ?? payload['file']);
@@ -955,16 +962,6 @@ class MoodleService {
             'itemid': itemIdFromResponse ?? itemid,
             'filename': filenameFromResponse ?? originalFilename,
           };
-        }
-
-        if (payload['event'] == 'fileexists') {
-          final newFile = payload['newfile'];
-          if (newFile is Map) {
-            return {
-              'itemid': itemid,
-              'filename': asNonEmptyString(newFile['filename']) ?? originalFilename,
-            };
-          }
         }
 
         return null;
@@ -993,6 +990,7 @@ class MoodleService {
           ..fields['title'] = originalFilename
           ..fields['savepath'] = '/'
           ..fields['author'] = username
+          ..fields['overwrite'] = 'true'
           ..files.add(file);
 
         if (contextId != null) uploadRequest.fields['ctx_id'] = contextId;
@@ -1015,6 +1013,11 @@ class MoodleService {
           if (data is Map && data['error'] != null) {
             await Logger.instance.log('UPLOAD: Moodle error for repo_id=$rid: ${data['error']}');
             return {'error': data['error'].toString()};
+          }
+
+          if (isFileExistsEvent(data)) {
+            await Logger.instance.log('UPLOAD: File exists event for repo_id=$rid - file may need different name');
+            return {'error': 'A file with this name already exists. Try renaming the file or upload via browser.'};
           }
         } catch (_) {}
 
@@ -1152,10 +1155,15 @@ class MoodleService {
         );
       }
 
+      final uploadedFileUrl = submissionFilesWithUrls.isNotEmpty
+          ? submissionFilesWithUrls.first['url'] as String?
+          : null;
+
       return {
         'success': true, 
         'message': hasSubmission ? 'File uploaded and submission saved' : 'File uploaded (submission may need verification)',
         'filename': uploadedFilename ?? originalFilename,
+        'file_url': uploadedFileUrl,
         'verified': hasSubmission,
       };
     } catch (e) {
