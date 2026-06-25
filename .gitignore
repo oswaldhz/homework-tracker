@@ -38,3 +38,11 @@ installer/installer_output/
 # Temporary files
 *.tmp
 *.temp
+
+# Backend debug / local artifacts
+backend/__pycache__/
+backend/browser_data/
+backend/*.png
+backend/*.html
+backend/*.db
+backend/.encryption_key
