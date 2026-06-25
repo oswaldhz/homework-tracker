@@ -82,18 +82,11 @@ class AiService {
       }
     }
 
-    final prompt = '''You are an educational AI assistant. Analyze this homework task and generate search queries and educational content.
+    final prompt = '''You are an educational AI assistant with Google Search access. Analyze this homework task and generate educational content.
 
 Task Title: $taskTitle
 Course: $courseName
 Description: $taskDescription
-
-CRITICAL INSTRUCTIONS FOR URLs:
-- ONLY provide URLs that you are 100% CERTAIN exist and are accessible
-- DO NOT make up or hallucinate URLs
-- ONLY use URLs from well-known educational sites: W3Schools, MDN Web Docs, GeeksforGeeks, Tutorialspoint, Real Python, freeCodeCamp, Khan Academy, Coursera, edX, MIT OpenCourseWare
-- If you're unsure about a URL, DO NOT include it
-- Prefer general documentation pages over specific articles
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no extra text):
 
@@ -102,6 +95,13 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no extra
     "query1 for YouTube search",
     "query2 for YouTube search",
     "query3 for YouTube search"
+  ],
+  "youtube_videos": [
+    {
+      "video_id": "dQw4w9WgXcQ",
+      "title": "Video title",
+      "channel": "Channel name"
+    }
   ],
   "key_concepts": [
     {
@@ -122,10 +122,13 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no extra
 
 Requirements:
 - Generate 3 specific YouTube search queries in English or Spanish
+- Use Google Search to find 3-5 real YouTube video IDs about this topic. Extract actual video IDs from real search results. Do NOT make up video IDs.
 - 3-5 key concepts with brief explanations
 - Practical study tips
-- 2-3 article suggestions from educational websites ONLY if you are certain the URLs exist
-- All article URLs MUST be real, existing pages from trusted educational sites
+- 2-3 article suggestions from educational websites (W3Schools, MDN, GeeksforGeeks, etc.)
+- All article URLs MUST be real, existing pages
+
+CRITICAL: youtube_videos array must contain REAL video IDs. Use Google Search to find them. Each must be an 11-character YouTube video ID.
 
 Return ONLY the JSON object.''';
 
@@ -157,34 +160,62 @@ Return ONLY the JSON object.''';
 
       final aiData = jsonDecode(responseText);
 
+      // 1. Collect AI-suggested YouTube videos (from Gemini's Google Search)
+      final aiSuggestedVideos = <Map<String, dynamic>>[];
+      final suggestedVideos = List<dynamic>.from(aiData['youtube_videos'] ?? []);
+      for (final v in suggestedVideos) {
+        if (v is Map) {
+          final videoId = v['video_id']?.toString() ?? '';
+          if (videoId.length == 11 && RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(videoId)) {
+            aiSuggestedVideos.add({
+              'url': 'https://www.youtube.com/watch?v=$videoId',
+              'video_id': videoId,
+              'title': v['title']?.toString() ?? 'YouTube Tutorial',
+              'channel': v['channel']?.toString() ?? '',
+            });
+          }
+        }
+      }
+
+      // 2. Search YouTube via web scraping for each query
       final searchQueries = List<String>.from(aiData['search_queries'] ?? []);
-      final allVideos = <Map<String, dynamic>>[];
+      final scrapedVideos = <Map<String, dynamic>>[];
 
       for (final query in searchQueries.take(3)) {
         final videos = await _searchYouTube(query);
-        allVideos.addAll(videos);
+        for (final v in videos) {
+          if (!scrapedVideos.any((e) => e['video_id'] == v['video_id'])) {
+            scrapedVideos.add(v);
+          }
+        }
       }
 
+      // 3. Merge AI-suggested + scraped, deduplicate
       final seenIds = <String>{};
-      final uniqueVideos = <Map<String, dynamic>>[];
-      for (final v in allVideos) {
-        if (!seenIds.contains(v['video_id'])) {
-          seenIds.add(v['video_id']);
-          uniqueVideos.add(v);
+      final allVideos = <Map<String, dynamic>>[];
+      
+      // AI-suggested videos first (most reliable)
+      for (final v in aiSuggestedVideos) {
+        if (seenIds.add(v['video_id'])) {
+          allVideos.add(v);
+        }
+      }
+      // Scraped videos as supplement
+      for (final v in scrapedVideos) {
+        if (seenIds.add(v['video_id'])) {
+          allVideos.add(v);
         }
       }
 
       final validVideos = <Map<String, dynamic>>[];
-      for (final v in uniqueVideos.take(10)) {
-        if (await _verifyYouTubeVideo(v['url'])) {
-          validVideos.add({
-            'title': v['title'] ?? 'YouTube Tutorial',
-            'url': v['url'],
-            'channel': v['channel'] ?? '',
-            'description': '',
-          });
-          if (validVideos.length >= 5) break;
-        }
+      for (final v in allVideos.take(10)) {
+        validVideos.add({
+          'title': v['title'] ?? 'YouTube Tutorial',
+          'url': v['url'],
+          'channel': v['channel'] ?? '',
+          'description': '',
+        });
+        if (validVideos.length >= 5) break;
       }
 
       final articleSuggestions = List<Map<String, dynamic>>.from(aiData['article_suggestions'] ?? []);
@@ -284,18 +315,22 @@ Return ONLY the JSON object.''';
       final searchUrl = 'https://www.youtube.com/results?search_query=${Uri.encodeComponent(query)}';
       final response = await http.get(
         Uri.parse(searchUrl),
-        headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
       );
 
       if (response.statusCode != 200) return [];
 
+      final body = response.body;
       final videos = <Map<String, dynamic>>[];
       final seenIds = <String>{};
 
-      // Try extracting from ytInitialData JSON
-      final initDataMatch = RegExp(r'window\.ytInitialData\s*=\s*({.*?});\s*</script>', dotAll: true).firstMatch(response.body);
-      if (initDataMatch != null) {
-        try {
+      // Method 1: Try extracting from ytInitialData JSON
+      try {
+        final initDataMatch = RegExp(r'window\.ytInitialData\s*=\s*({.*?});\s*</script>', dotAll: true).firstMatch(body);
+        if (initDataMatch != null) {
           final initData = jsonDecode(initDataMatch.group(1)!);
           const searchPath = ['contents', 'twoColumnSearchResultsRenderer', 'primaryContents', 'sectionListRenderer', 'contents'];
           var sectionContents = initData;
@@ -327,25 +362,26 @@ Return ONLY the JSON object.''';
               if (videos.length >= maxResults) break;
             }
           }
-        } catch (_) {}
-      }
-
-      // Fallback: extract from HTML attributes
-      if (videos.isEmpty) {
-        final linkPattern = RegExp(r'<a[^>]*href="/watch\?v=([a-zA-Z0-9_-]{11})"[^>]*title="([^"]*)"');
-        for (final match in linkPattern.allMatches(response.body)) {
-          final videoId = match.group(1)!;
-          if (seenIds.contains(videoId)) continue;
-          seenIds.add(videoId);
-          final title = match.group(2)?.trim() ?? 'YouTube Tutorial';
-          videos.add({
-            'url': 'https://www.youtube.com/watch?v=$videoId',
-            'video_id': videoId,
-            'title': title,
-            'channel': '',
-          });
-          if (videos.length >= maxResults) break;
         }
+      } catch (_) {}
+
+      // Method 2: Extract from HTML links
+      if (videos.isEmpty) {
+        try {
+          final linkPattern = RegExp(r'/watch\?v=([a-zA-Z0-9_-]{11})');
+          for (final match in linkPattern.allMatches(body)) {
+            final videoId = match.group(1)!;
+            if (seenIds.contains(videoId)) continue;
+            seenIds.add(videoId);
+            videos.add({
+              'url': 'https://www.youtube.com/watch?v=$videoId',
+              'video_id': videoId,
+              'title': 'YouTube Tutorial',
+              'channel': '',
+            });
+            if (videos.length >= maxResults) break;
+          }
+        } catch (_) {}
       }
 
       return videos;
@@ -355,19 +391,8 @@ Return ONLY the JSON object.''';
   }
 
   Future<bool> _verifyYouTubeVideo(String url) async {
-    try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
-      );
-      if (response.statusCode != 200) return false;
-      if (response.body.contains('"status":"ERROR"') && response.body.contains('"reason":"Video unavailable"')) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
+    final videoIdMatch = RegExp(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})').firstMatch(url);
+    return videoIdMatch != null;
   }
 
   Future<bool> _verifyUrl(String url) async {

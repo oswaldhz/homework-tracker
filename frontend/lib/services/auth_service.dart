@@ -51,7 +51,7 @@ class AuthService {
       final decrypted = encrypter.decrypt64(encryptedValue, iv: _iv);
       return decrypted;
     } on FormatException {
-      throw Exception('Saved credentials are corrupted. Please log in to Moodle again to reset them.');
+      throw Exception('Encryption key changed — please go to Settings and log in to Moodle again to re-save your credentials.');
     } catch (e) {
       throw Exception('Could not read saved credentials. Please log in again: $e');
     }
