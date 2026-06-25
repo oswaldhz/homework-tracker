@@ -218,6 +218,19 @@ Return ONLY the JSON object.''';
         if (validVideos.length >= 5) break;
       }
 
+      // Fallback: if no videos found, generate YouTube search links
+      if (validVideos.isEmpty && searchQueries.isNotEmpty) {
+        for (final query in searchQueries) {
+          validVideos.add({
+            'title': 'Search YouTube: $query',
+            'url': 'https://www.youtube.com/results?search_query=${Uri.encodeComponent(query)}',
+            'channel': 'YouTube Search',
+            'description': 'Click to search YouTube for this topic',
+          });
+          if (validVideos.length >= 5) break;
+        }
+      }
+
       final articleSuggestions = List<Map<String, dynamic>>.from(aiData['article_suggestions'] ?? []);
       final articleUrls = articleSuggestions
           .map((a) => a['url']?.toString() ?? '')
