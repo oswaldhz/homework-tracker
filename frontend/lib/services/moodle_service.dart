@@ -1102,11 +1102,25 @@ class MoodleService {
       }
       
       // Check for file list in submission
-      final fileList = verifyDoc.querySelectorAll('.filemanager-file, .fp-file, .submission-file');
+      final fileList = verifyDoc.querySelectorAll('.filemanager-file, .fp-file, .submission-file, .submission-file-list a');
+      final List<Map<String, dynamic>> submissionFilesWithUrls = [];
       if (fileList.isNotEmpty) {
         hasSubmission = true;
         submittedFileName = fileList.first.text.trim();
         await Logger.instance.log('UPLOAD: Found file in submission: $submittedFileName');
+        for (final fileEl in fileList) {
+          final fileName = fileEl.text.trim();
+          final fileUrl = fileEl.attributes['href'];
+          if (fileName.isNotEmpty) {
+            submissionFilesWithUrls.add({
+              'filename': fileName,
+              'url': fileUrl != null ? _resolveUrl(fileUrl) : null,
+              'size': await File(filePath).length(),
+              'uploaded_at': DateTime.now().toIso8601String(),
+              'itemid': finalItemid,
+            });
+          }
+        }
       }
 
       await Logger.instance.log('UPLOAD: Verification result - hasSubmission: $hasSubmission, status: $submissionStatus');
@@ -1115,14 +1129,17 @@ class MoodleService {
       final db = await DatabaseService.instance.database;
       final existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
       if (existing.isNotEmpty) {
-        final submissionFiles = [
-          {
-            'filename': uploadedFilename ?? submittedFileName ?? originalFilename,
-            'size': await File(filePath).length(),
-            'uploaded_at': DateTime.now().toIso8601String(),
-            'itemid': finalItemid,
-          }
-        ];
+        final submissionFiles = submissionFilesWithUrls.isNotEmpty
+            ? submissionFilesWithUrls
+            : [
+                {
+                  'filename': uploadedFilename ?? submittedFileName ?? originalFilename,
+                  'url': null,
+                  'size': await File(filePath).length(),
+                  'uploaded_at': DateTime.now().toIso8601String(),
+                  'itemid': finalItemid,
+                }
+              ];
         await db.update('tasks',
           {
             'file_uploaded': hasSubmission ? 1 : 1,

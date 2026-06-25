@@ -406,7 +406,9 @@ class TaskDetailScreen extends StatelessWidget {
     final size = file['size'] as int? ?? 0;
     final uploadedAt = file['uploaded_at'] as String?;
     final itemid = file['itemid'] as int?;
-    
+    final fileUrl = file['url'] as String?;
+    final fileUrlValid = fileUrl != null && fileUrl.isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -417,31 +419,59 @@ class TaskDetailScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            _getFileIcon(filename.split('.').last),
-            color: theme.colorScheme.primary,
-            size: 28,
+          GestureDetector(
+            onTap: () {
+              if (fileUrlValid) {
+                _launchUrl(fileUrl);
+              } else if (task.url != null) {
+                _launchUrl(task.url!);
+              }
+            },
+            child: Icon(
+              _getFileIcon(filename.split('.').last),
+              color: theme.colorScheme.primary,
+              size: 28,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  filename,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${_formatFileSize(size)}  •  ${uploadedAt != null ? _formatDate(DateTime.parse(uploadedAt)) : 'Unknown date'}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
-                ),
-              ],
+            child: GestureDetector(
+              onTap: () {
+                if (fileUrlValid) {
+                  _launchUrl(fileUrl);
+                } else if (task.url != null) {
+                  _launchUrl(task.url!);
+                }
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    filename,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: fileUrlValid || task.url != null ? theme.colorScheme.primary : null,
+                      decoration: fileUrlValid || task.url != null ? TextDecoration.underline : null,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_formatFileSize(size)}  •  ${uploadedAt != null ? _formatDate(DateTime.parse(uploadedAt)) : 'Unknown date'}',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
             ),
           ),
-          if (itemid != null)
+          if (fileUrlValid || task.url != null)
+            IconButton(
+              icon: Icon(Icons.open_in_new, color: theme.colorScheme.primary, size: 20),
+              tooltip: fileUrlValid ? 'Open file' : 'Open in Moodle',
+              onPressed: () => _launchUrl(fileUrlValid ? fileUrl : task.url!),
+            ),
+          if (itemid != null && !fileUrlValid)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -459,6 +489,13 @@ class TaskDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
   
   String _formatFileSize(int bytes) {
