@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
+import '../services/logger_service.dart';
 import '../services/moodle_service.dart';
 import 'dashboard_screen.dart';
 
@@ -45,15 +46,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loadSavedCredentials() async {
     try {
-      final api = context.read<ApiService>();
-      final savedCredentials = await api.getAllSavedCredentials();
-      
+      // Read SharedPreferences FIRST, before any database call,
+      // so form fields are populated even if the DB call fails.
       final prefs = await SharedPreferences.getInstance();
       final savedUrl = prefs.getString('moodle_url');
       final savedUsername = prefs.getString('username');
       final savedPassword = prefs.getString('password');
       final savedLoginType = prefs.getString('login_type') ?? 'moodle';
       final rememberMe = prefs.getBool('remember_me') ?? false;
+
+      await Logger.instance.log('LOAD_CRED: savedUrl=$savedUrl, savedUsername=$savedUsername, '
+          'savedPassword=${savedPassword != null ? 'set(${savedPassword.length})' : 'null'}'
+          ', savedLoginType=$savedLoginType, rememberMe=$rememberMe');
+
+      List<Map<String, dynamic>> savedCredentials = [];
+      try {
+        final api = context.read<ApiService>();
+        savedCredentials = await api.getAllSavedCredentials();
+        await Logger.instance.log('LOAD_CRED: DB returned ${savedCredentials.length} credentials');
+      } catch (dbErr) {
+        await Logger.instance.log('LOAD_CRED: DB error (non-fatal): $dbErr');
+      }
 
       bool shouldAutoLogin = false;
       setState(() {
@@ -71,6 +84,8 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       if (shouldAutoLogin) {
+        await Logger.instance.log('LOAD_CRED: shouldAutoLogin=true, navigating to dashboard');
+        // Let the widget rebuild after setState before calling handleLogin
         await Future.delayed(const Duration(milliseconds: 100));
         if (mounted) {
           await _handleLogin();
@@ -83,6 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await _detectSso(checkUrl);
       }
     } catch (e) {
+      await Logger.instance.log('LOAD_CRED: critical error: $e');
       setState(() {
         _loadingSavedCredentials = false;
       });
@@ -98,6 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.remove('login_type');
       await prefs.remove('session_cookie');
       await prefs.setBool('remember_me', false);
+      await Logger.instance.log('SAVE_CRED: cleared (rememberMe=false)');
       return;
     }
 
@@ -106,6 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setString('username', _usernameController.text.trim());
     await prefs.setString('password', _passwordController.text);
     await prefs.setBool('remember_me', true);
+    await Logger.instance.log('SAVE_CRED: saved to prefs (url=${_urlController.text.trim()}, user=${_usernameController.text.trim()}, passwordLen=${_passwordController.text.length})');
     
     // Also save to database for autocomplete
     final api = context.read<ApiService>();
@@ -115,6 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text,
       rememberMe: true,
     );
+    await Logger.instance.log('SAVE_CRED: saved to DB');
   }
 
   Future<void> _detectSso(String url) async {
