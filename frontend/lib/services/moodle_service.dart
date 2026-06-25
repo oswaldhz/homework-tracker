@@ -775,7 +775,7 @@ class MoodleService {
         await Logger.instance.log('UPLOAD: Using generated itemid: $itemid');
       }
 
-      // Step 2: Discover upload repository ID
+      // Step 2: Discover upload repository ID from filepicker HTML
       await Logger.instance.log('UPLOAD: Discovering upload repository');
 
       final candidateRepoIds = <String>[];
@@ -785,17 +785,42 @@ class MoodleService {
         }
       }
 
-      // Always include upload repo (most common in default Moodle)
+      // Strategy A: always try repo_id=0 first (standard upload repository)
       _tryAddId('0');
 
-      // Extract contextid from page for API calls
-      final ctxMatch = RegExp(r"""["']?contextid["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
-      final ctxId = ctxMatch?.group(1) ?? '';
-
-      // Strategy A: parse repository list from JavaScript config on page
+      // Strategy B: fetch the filepicker popup HTML and find the Upload repo tab
       try {
-        final body = editResp.body;
-        final initMatch = RegExp(r'M\.core_filepicker\.init\([^,]+,\s*(\{[\s\S]*?\})\s*\)').firstMatch(body);
+        final fpUrl = '$_baseUrl/repository/repository_ajax.php'
+            '?action=filepicker&sesskey=$sesskey&env=filemanager&itemid=$itemid';
+        final fpResp = await _get(client, fpUrl);
+        final fpBody = fpResp.body;
+
+        // Look for data-repositorytype="upload" on the tab element
+        final attrMatch = RegExp(
+          r"""data-repositorytype=["']?upload["']?[^>]*data-repositoryid=["']?(\d+)""",
+        ).firstMatch(fpBody);
+        if (attrMatch != null) {
+          _tryAddId(attrMatch.group(1)!);
+          await Logger.instance.log('UPLOAD: Found upload repo from filepicker tab: id=${attrMatch.group(1)}');
+        } else {
+          // Look for repo_upload_file input and go up to find form action
+          final formMatch = RegExp(
+            r'repository_ajax\.php\?.*?[&?]repo_id[=/](\d+)',
+          ).firstMatch(fpBody);
+          if (formMatch != null) {
+            _tryAddId(formMatch.group(1)!);
+            await Logger.instance.log('UPLOAD: Found upload repo from filepicker form: id=${formMatch.group(1)}');
+          }
+        }
+      } catch (e) {
+        await Logger.instance.log('UPLOAD: Filepicker fetch failed: $e');
+      }
+
+      // Strategy C: parse repository list from JavaScript config on edit page
+      try {
+        final initMatch = RegExp(
+          r'M\.core_filepicker\.init\([^,]+,\s*(\{[\s\S]*?\})\s*\)',
+        ).firstMatch(editResp.body);
         if (initMatch != null) {
           final config = jsonDecode(initMatch.group(1)!);
           final repos = config['repositories'] as List?;
@@ -812,8 +837,10 @@ class MoodleService {
         await Logger.instance.log('UPLOAD: JS config parse failed: $e');
       }
 
-      // Strategy B: call repositories API
+      // Strategy D: call repositories API with context ID
       try {
+        final ctxMatch = RegExp(r"""["']?contextid["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
+        final ctxId = ctxMatch?.group(1) ?? '';
         final repoListUrl = '$_baseUrl/repository/repository_ajax.php'
             '?action=repositories&sesskey=$sesskey${ctxId.isNotEmpty ? '&ctx_id=$ctxId' : ''}';
         final repoResp = await _get(client, repoListUrl);
@@ -830,25 +857,22 @@ class MoodleService {
         await Logger.instance.log('UPLOAD: Repo API failed: $e');
       }
 
-      // Strategy C: extract repo_id from page HTML
+      // Strategy E: extract repo_id from page HTML
       try {
-        final pageMatch =
-            RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
+        final pageMatch = RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
         if (pageMatch != null) {
           _tryAddId(pageMatch.group(1)!);
-          await Logger.instance.log('UPLOAD: Found repo_id from page regex: ${pageMatch.group(1)}');
         }
         final repoInput = editDoc.querySelector('input[name="repo_id"], select[name="repo_id"]');
         if (repoInput != null) {
           final val = repoInput.attributes['value'];
           if (val != null && val.isNotEmpty) {
             _tryAddId(val);
-            await Logger.instance.log('UPLOAD: Found repo_id from input: $val');
           }
         }
       } catch (_) {}
 
-      // Strategy D: common fallback IDs (not already added)
+      // Strategy F: common fallback IDs (not already added)
       for (final id in ['1', '2', '3', '4', '5', '6', '7']) {
         _tryAddId(id);
       }
