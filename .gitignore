@@ -1,48 +1,61 @@
-# Dart/Flutter
-.dart_tool/
-.packages
-pubspec.lock
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
 build/
-*.dart_tool/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Debug / development artifacts
+backend/debug_*.py
+backend/debug_*.txt
+backend/debug_*.html
+backend/debug_*.png
+backend/test_*.py
+backend/verify_*.py
+backend/check_*.py
+backend/simple_*.py
+backend/debug_login.py
+debug_upload.html
+*.spec
+
+# Secrets & local data
+.encryption_key
+.gemini_api_key
+*.db
+*.db-shm
+*.db-wal
+HomeworkTracker/
 
 # IDE
-.idea/
 .vscode/
-*.iml
+.idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Build outputs
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Local configuration
-*.local.yaml
-*.local.json
-
-# Secrets (never commit)
-*.env
-*.key
-.gemini_api_key
-
-# Installer outputs
-installer/installer_output/
+# Flutter / Dart
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/build/
+frontend/.packages
+frontend/pubspec.lock
 
 # Logs
 *.log
-
-# Temporary files
-*.tmp
-*.temp
-
-# Backend debug / local artifacts
-backend/__pycache__/
-backend/browser_data/
-backend/*.png
-backend/*.html
-backend/*.db
-backend/.encryption_key
+logs/

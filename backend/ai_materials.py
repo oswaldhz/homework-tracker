@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import GEMINI_KEY_PATH
 
 def search_youtube(query: str, max_results: int = 5) -> List[Dict]:
-    """Search YouTube and return real video URLs"""
+    """Search YouTube and return real video URLs with titles"""
     search_url = f"https://www.youtube.com/results?search_query={requests.utils.quote(query)}"
     
     headers = {
@@ -21,25 +21,63 @@ def search_youtube(query: str, max_results: int = 5) -> List[Dict]:
         if r.status_code != 200:
             return []
         
-        video_ids = set()
-        
-        # Extract from watch URLs
-        watch_pattern = r'"watch\?v=([a-zA-Z0-9_-]{11})"'
-        matches = re.findall(watch_pattern, r.text)
-        video_ids.update(matches)
-        
-        # Extract from videoId fields
-        video_id_pattern = r'"videoId":"([a-zA-Z0-9_-]{11})"'
-        matches = re.findall(video_id_pattern, r.text)
-        video_ids.update(matches)
-        
+        # Extract video IDs and titles from the ytInitialData JSON blob
         videos = []
-        for vid in list(video_ids)[:max_results]:
-            videos.append({
-                "url": f"https://www.youtube.com/watch?v={vid}",
-                "video_id": vid
-            })
-        
+        seen_ids = set()
+
+        # Try to extract from ytInitialData for richer metadata
+        init_data_match = re.search(r'var ytInitialData\s*=\s*(\{.+?\});\s*</script>', r.text, re.DOTALL)
+        if init_data_match:
+            try:
+                data = json.loads(init_data_match.group(1))
+                contents = (
+                    data.get('contents', {})
+                    .get('twoColumnSearchResultsRenderer', {})
+                    .get('primaryContents', {})
+                    .get('sectionListRenderer', {})
+                    .get('contents', [])
+                )
+                for section in contents:
+                    items = section.get('itemSectionRenderer', {}).get('contents', [])
+                    for item in items:
+                        vr = item.get('videoRenderer', {})
+                        vid = vr.get('videoId')
+                        if not vid or vid in seen_ids:
+                            continue
+                        title_runs = vr.get('title', {}).get('runs', [])
+                        title = ''.join(r.get('text', '') for r in title_runs) or 'YouTube Video'
+                        channel_runs = vr.get('ownerText', {}).get('runs', [])
+                        channel = ''.join(r.get('text', '') for r in channel_runs)
+                        seen_ids.add(vid)
+                        videos.append({
+                            "url": f"https://www.youtube.com/watch?v={vid}",
+                            "video_id": vid,
+                            "title": title,
+                            "channel": channel,
+                        })
+                        if len(videos) >= max_results:
+                            return videos
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        # Fallback: regex extraction without titles
+        if not videos:
+            watch_pattern = r'"watch\?v=([a-zA-Z0-9_-]{11})"'
+            matches = re.findall(watch_pattern, r.text)
+            video_id_pattern = r'"videoId":"([a-zA-Z0-9_-]{11})"'
+            matches += re.findall(video_id_pattern, r.text)
+            for vid in dict.fromkeys(matches):
+                if vid not in seen_ids:
+                    seen_ids.add(vid)
+                    videos.append({
+                        "url": f"https://www.youtube.com/watch?v={vid}",
+                        "video_id": vid,
+                        "title": f"YouTube Video",
+                        "channel": "",
+                    })
+                    if len(videos) >= max_results:
+                        break
+
         return videos
     except Exception as e:
         print(f"YouTube search error: {e}")
@@ -62,14 +100,19 @@ def verify_youtube_video(url: str) -> bool:
 
 class GeminiMaterialFinder:
     def __init__(self):
+        self.available = False
+        self.model = None
+        self.search_tool = None
         if GEMINI_KEY_PATH.exists():
-            api_key = GEMINI_KEY_PATH.read_text().strip()
-            genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-2.5-flash')
-            self.search_tool = genai.protos.Tool(google_search=genai.protos.Tool.GoogleSearch())
-            self.available = True
-        else:
-            self.available = False
+            try:
+                api_key = GEMINI_KEY_PATH.read_text().strip()
+                if api_key:
+                    genai.configure(api_key=api_key)
+                    self.model = genai.GenerativeModel('gemini-2.5-flash')
+                    self.search_tool = genai.protos.Tool(google_search=genai.protos.Tool.GoogleSearch())
+                    self.available = True
+            except Exception as e:
+                print(f"Warning: Failed to initialize Gemini with saved key: {e}")
 
     def set_api_key(self, api_key: str):
         GEMINI_KEY_PATH.write_text(api_key.strip())
@@ -251,9 +294,9 @@ Return ONLY the JSON object."""
             videos = []
             for v in valid_videos[:5]:
                 videos.append({
-                    "title": f"YouTube Tutorial",
+                    "title": v.get("title", "YouTube Video"),
                     "url": v['url'],
-                    "channel": "",
+                    "channel": v.get("channel", ""),
                     "description": ""
                 })
 

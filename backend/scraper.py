@@ -26,6 +26,38 @@ def get_current_week_range():
     end = start + timedelta(days=6)
     return start, end
 
+def _ensure_logged_in(page, moodle_url: str, username: str, password: str) -> bool:
+    """Check if the browser is logged in to Moodle, and log in if needed.
+    Returns True on success, False on failure."""
+    needs_login = "login" in page.url.lower() or page.query_selector('input[name="username"]') is not None
+
+    if not needs_login:
+        return True
+
+    max_login_attempts = 3
+    for attempt in range(max_login_attempts):
+        try:
+            login_url = moodle_url.rstrip("/") + "/login/index.php"
+            page.goto(login_url, timeout=30000)
+            page.wait_for_load_state("networkidle", timeout=10000)
+
+            page.fill('input[name="username"]', username)
+            page.fill('input[name="password"]', password)
+            page.click('#loginbtn')
+            page.wait_for_load_state("networkidle", timeout=15000)
+
+            if "/login/index.php" not in page.url:
+                return True
+
+            print(f"Login attempt {attempt + 1} failed, retrying...")
+            page.wait_for_timeout(2000)
+        except Exception as e:
+            print(f"Login attempt {attempt + 1} error: {e}")
+            if attempt < max_login_attempts - 1:
+                page.wait_for_timeout(2000)
+
+    return False
+
 def scrape_moodle_assignments(moodle_url: str, username: str, password: str):
     BROWSER_DATA_DIR.mkdir(exist_ok=True)
 
@@ -41,18 +73,8 @@ def scrape_moodle_assignments(moodle_url: str, username: str, password: str):
             page.goto(moodle_url.rstrip("/"), timeout=15000)
             page.wait_for_load_state("networkidle", timeout=10000)
 
-            needs_login = "login" in page.url.lower() or page.query_selector('input[name="username"]') is not None
-
-            if needs_login:
-                login_url = moodle_url.rstrip("/") + "/login/index.php"
-                page.goto(login_url, timeout=30000)
-                page.fill('input[name="username"]', username)
-                page.fill('input[name="password"]', password)
-                page.click('#loginbtn')
-                page.wait_for_load_state("networkidle", timeout=15000)
-
-                if "/login/index.php" in page.url:
-                    raise Exception("Login failed. Check credentials.")
+            if not _ensure_logged_in(page, moodle_url, username, password):
+                raise Exception("Login failed. Check credentials.")
 
             assignments = extract_assignments(page, moodle_url)
 
@@ -98,7 +120,7 @@ def extract_assignments(page, moodle_url):
                         due_date = datetime.fromtimestamp(int(timestamp))
 
                 course_link = event.query_selector('a[href*="/course/view.php"]')
-                course_name = course_link.inner_text().strip() if course_link else "ITLA"
+                course_name = course_link.inner_text().strip() if course_link else "Unknown Course"
                 course_url = course_link.get_attribute('href') if course_link else ""
 
                 action_link = event.query_selector('div.card-footer a.card-link')
@@ -133,15 +155,19 @@ def parse_date(date_text):
     ]
 
     months = {
+        # Spanish full
         'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
         'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
         'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+        # Spanish abbreviated
         'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4,
         'may': 5, 'jun': 6, 'jul': 7, 'ago': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dic': 12,
+        # English full
         'january': 1, 'february': 2, 'march': 3, 'april': 4,
-        'june': 6, 'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12,
-        'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4,
-        'jun': 6, 'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+        'may': 5, 'june': 6, 'july': 7, 'august': 8,
+        'september': 9, 'october': 10, 'november': 11, 'december': 12,
+        # English abbreviated
+        'jan': 1, 'apr': 4, 'aug': 8, 'dec': 12,
     }
 
     for pattern in date_patterns:
@@ -177,37 +203,9 @@ def toggle_moodle_completion(moodle_url: str, username: str, password: str, task
             page.goto(moodle_url.rstrip("/"), timeout=15000)
             page.wait_for_load_state("networkidle", timeout=10000)
 
-            needs_login = "login" in page.url.lower() or page.query_selector('input[name="username"]') is not None
-
-            if needs_login:
-                login_success = False
-                max_login_attempts = 3
-                
-                for attempt in range(max_login_attempts):
-                    try:
-                        login_url = moodle_url.rstrip("/") + "/login/index.php"
-                        page.goto(login_url, timeout=30000)
-                        page.wait_for_load_state("networkidle", timeout=10000)
-                        
-                        page.fill('input[name="username"]', username)
-                        page.fill('input[name="password"]', password)
-                        page.click('#loginbtn')
-                        page.wait_for_load_state("networkidle", timeout=15000)
-                        
-                        if "/login/index.php" not in page.url:
-                            login_success = True
-                            break
-                        else:
-                            print(f"Login attempt {attempt + 1} failed, retrying...")
-                            page.wait_for_timeout(2000)
-                    except Exception as e:
-                        print(f"Login attempt {attempt + 1} error: {e}")
-                        if attempt < max_login_attempts - 1:
-                            page.wait_for_timeout(2000)
-                
-                if not login_success:
-                    context.close()
-                    return {"success": False, "message": "Login failed after multiple attempts"}
+            if not _ensure_logged_in(page, moodle_url, username, password):
+                context.close()
+                return {"success": False, "message": "Login failed after multiple attempts"}
 
             page.goto(task_url, timeout=30000)
             page.wait_for_load_state("networkidle", timeout=10000)
@@ -299,49 +297,14 @@ def upload_file_to_moodle(moodle_url: str, username: str, password: str, task_ur
         )
         page = context.new_page()
 
-        step = "initialization"
         try:
             step = "navigating to moodle"
             page.goto(moodle_url.rstrip("/"), timeout=30000)
             page.wait_for_load_state("networkidle", timeout=15000)
 
-            needs_login = "login" in page.url.lower() or page.query_selector('input[name="username"]') is not None
-
-            if needs_login:
-                step = "logging in"
-                login_success = False
-                max_login_attempts = 3
-                
-                for attempt in range(max_login_attempts):
-                    try:
-                        login_url = moodle_url.rstrip("/") + "/login/index.php"
-                        page.goto(login_url, timeout=30000)
-                        page.wait_for_load_state("networkidle", timeout=10000)
-                        
-                        # Fill credentials
-                        page.fill('input[name="username"]', username)
-                        page.fill('input[name="password"]', password)
-                        page.click('#loginbtn')
-                        
-                        # Wait for login to complete
-                        page.wait_for_load_state("networkidle", timeout=15000)
-                        page.wait_for_timeout(2000)
-                        
-                        # Check if login succeeded
-                        if "/login/index.php" not in page.url:
-                            login_success = True
-                            break
-                        else:
-                            print(f"Login attempt {attempt + 1} failed, retrying...")
-                            page.wait_for_timeout(2000)
-                    except Exception as e:
-                        print(f"Login attempt {attempt + 1} error: {e}")
-                        if attempt < max_login_attempts - 1:
-                            page.wait_for_timeout(2000)
-                
-                if not login_success:
-                    context.close()
-                    return {"success": False, "message": "Login failed after multiple attempts. Please verify your credentials in Settings."}
+            if not _ensure_logged_in(page, moodle_url, username, password):
+                context.close()
+                return {"success": False, "message": "Login failed after multiple attempts. Please verify your credentials in Settings."}
 
             if "action=editsubmission" not in task_url:
                 task_url = task_url.split("?")[0] + "?action=editsubmission"
@@ -383,8 +346,8 @@ def upload_file_to_moodle(moodle_url: str, username: str, password: str, task_ur
 
             step = "opening file picker"
             file_picker = None
-            for wait_ms in [1000, 2000, 3000]:
-                page.wait_for_timeout(wait_ms if wait_ms == 1000 else 1000)
+            for _ in range(3):
+                page.wait_for_timeout(1000)
                 file_picker = page.query_selector('.file-picker')
                 if not file_picker:
                     file_picker = page.query_selector('.moodle-dialogue-content:visible')
@@ -524,11 +487,8 @@ def upload_file_to_moodle(moodle_url: str, username: str, password: str, task_ur
                 if len(files_in_manager) > 0:
                     print(f"Found {len(files_in_manager)} file(s) using alternative selectors")
                 else:
-                    # Save page content for debugging
-                    page_content = page.content()
-                    with open('debug_upload.html', 'w', encoding='utf-8') as f:
-                        f.write(page_content)
-                    print("Debug: Saved page content to debug_upload.html")
+                    # Log warning but don't write debug file in production
+                    print(f"Debug: File not found in manager after upload. File: {file_name}, ext: .{file_ext}")
                     context.close()
                     extra = f" Accepted types: {accepted_info}." if accepted_info else ""
                     return {"success": False, "message": f"File '{file_name}' was not added to the file manager after upload. Check that the file type '.{file_ext}' is accepted.{extra}"}
@@ -601,37 +561,9 @@ def get_quiz_questions(moodle_url: str, username: str, password: str, quiz_url: 
             page.goto(moodle_url.rstrip("/"), timeout=15000)
             page.wait_for_load_state("networkidle", timeout=10000)
 
-            needs_login = "login" in page.url.lower() or page.query_selector('input[name="username"]') is not None
-
-            if needs_login:
-                login_success = False
-                max_login_attempts = 3
-                
-                for attempt in range(max_login_attempts):
-                    try:
-                        login_url = moodle_url.rstrip("/") + "/login/index.php"
-                        page.goto(login_url, timeout=30000)
-                        page.wait_for_load_state("networkidle", timeout=10000)
-                        
-                        page.fill('input[name="username"]', username)
-                        page.fill('input[name="password"]', password)
-                        page.click('#loginbtn')
-                        page.wait_for_load_state("networkidle", timeout=15000)
-                        
-                        if "/login/index.php" not in page.url:
-                            login_success = True
-                            break
-                        else:
-                            print(f"Login attempt {attempt + 1} failed, retrying...")
-                            page.wait_for_timeout(2000)
-                    except Exception as e:
-                        print(f"Login attempt {attempt + 1} error: {e}")
-                        if attempt < max_login_attempts - 1:
-                            page.wait_for_timeout(2000)
-                
-                if not login_success:
-                    context.close()
-                    return {"success": False, "message": "Login failed after multiple attempts"}
+            if not _ensure_logged_in(page, moodle_url, username, password):
+                context.close()
+                return {"success": False, "message": "Login failed after multiple attempts"}
 
             page.goto(quiz_url, timeout=30000)
             page.wait_for_load_state("networkidle", timeout=10000)
@@ -705,37 +637,9 @@ def submit_quiz_answers(moodle_url: str, username: str, password: str, quiz_url:
             page.goto(moodle_url.rstrip("/"), timeout=15000)
             page.wait_for_load_state("networkidle", timeout=10000)
 
-            needs_login = "login" in page.url.lower() or page.query_selector('input[name="username"]') is not None
-
-            if needs_login:
-                login_success = False
-                max_login_attempts = 3
-                
-                for attempt in range(max_login_attempts):
-                    try:
-                        login_url = moodle_url.rstrip("/") + "/login/index.php"
-                        page.goto(login_url, timeout=30000)
-                        page.wait_for_load_state("networkidle", timeout=10000)
-                        
-                        page.fill('input[name="username"]', username)
-                        page.fill('input[name="password"]', password)
-                        page.click('#loginbtn')
-                        page.wait_for_load_state("networkidle", timeout=15000)
-                        
-                        if "/login/index.php" not in page.url:
-                            login_success = True
-                            break
-                        else:
-                            print(f"Login attempt {attempt + 1} failed, retrying...")
-                            page.wait_for_timeout(2000)
-                    except Exception as e:
-                        print(f"Login attempt {attempt + 1} error: {e}")
-                        if attempt < max_login_attempts - 1:
-                            page.wait_for_timeout(2000)
-                
-                if not login_success:
-                    context.close()
-                    return {"success": False, "message": "Login failed after multiple attempts"}
+            if not _ensure_logged_in(page, moodle_url, username, password):
+                context.close()
+                return {"success": False, "message": "Login failed after multiple attempts"}
 
             page.goto(quiz_url, timeout=30000)
             page.wait_for_load_state("networkidle", timeout=10000)
@@ -800,39 +704,11 @@ def scrape_moodle_course_resources(moodle_url: str, username: str, password: str
             page.goto(moodle_url.rstrip("/"), timeout=15000)
             page.wait_for_load_state("networkidle", timeout=10000)
 
-            needs_login = "login" in page.url.lower() or page.query_selector('input[name="username"]') is not None
+            if not _ensure_logged_in(page, moodle_url, username, password):
+                context.close()
+                return {"success": False, "message": "Login failed after multiple attempts"}
 
-            if needs_login:
-                login_success = False
-                max_login_attempts = 3
-                
-                for attempt in range(max_login_attempts):
-                    try:
-                        login_url = moodle_url.rstrip("/") + "/login/index.php"
-                        page.goto(login_url, timeout=30000)
-                        page.wait_for_load_state("networkidle", timeout=10000)
-                        
-                        page.fill('input[name="username"]', username)
-                        page.fill('input[name="password"]', password)
-                        page.click('#loginbtn')
-                        page.wait_for_load_state("networkidle", timeout=15000)
-                        
-                        if "/login/index.php" not in page.url:
-                            login_success = True
-                            break
-                        else:
-                            print(f"Login attempt {attempt + 1} failed, retrying...")
-                            page.wait_for_timeout(2000)
-                    except Exception as e:
-                        print(f"Login attempt {attempt + 1} error: {e}")
-                        if attempt < max_login_attempts - 1:
-                            page.wait_for_timeout(2000)
-                
-                if not login_success:
-                    context.close()
-                    return {"success": False, "message": "Login failed after multiple attempts"}
-
-            page.goto(quiz_url, timeout=30000)
+            page.goto(course_url, timeout=30000)
             page.wait_for_load_state("networkidle", timeout=10000)
             page.wait_for_timeout(2000)
 
@@ -853,20 +729,20 @@ def scrape_moodle_course_resources(moodle_url: str, username: str, password: str
                     link_elem = resource_elem.query_selector('a[href]')
                     url = link_elem.get_attribute('href') if link_elem else ""
 
-                    resource_type = "document"
-                    if "modtype_resource" in resource_elem.get_attribute('class') or "":
-                        resource_type = "document"
-                    elif "modtype_url" in resource_elem.get_attribute('class') or "":
+                    class_attr = resource_elem.get_attribute('class') or ""
+                    if "modtype_url" in class_attr:
                         resource_type = "link"
-                    elif "modtype_page" in resource_elem.get_attribute('class') or "":
+                    elif "modtype_page" in class_attr:
                         resource_type = "page"
+                    else:
+                        resource_type = "document"
 
                     resources.append({
                         "title": title,
                         "url": url,
                         "type": resource_type
                     })
-                except Exception as e:
+                except Exception:
                     continue
 
             return {"success": True, "resources": resources}
@@ -878,7 +754,13 @@ def scrape_moodle_course_resources(moodle_url: str, username: str, password: str
 
 def save_assignments(db, assignments, moodle_url):
     for assignment in assignments:
-        moodle_id = re.sub(r'[^\w]', '_', assignment['title'][:50])
+        # Build a stable, unique moodle_id from the title + URL to avoid collisions
+        # between tasks whose titles share the same first 50 characters.
+        url_suffix = assignment.get('url', '') or ''
+        import hashlib
+        url_hash = hashlib.md5(url_suffix.encode()).hexdigest()[:8]
+        title_slug = re.sub(r'[^\w]', '_', assignment['title'][:40])
+        moodle_id = f"{title_slug}_{url_hash}"
 
         course = db.query(Course).filter(Course.name == assignment['course_name']).first()
         if not course:

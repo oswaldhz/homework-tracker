@@ -1,6 +1,7 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
@@ -14,12 +15,18 @@ from scheduler import start_scheduler, stop_scheduler
 from ai_materials import gemini_finder
 from config import UPLOADS_DIR
 
-app = FastAPI(title="Homework Tracker API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    stop_scheduler()
+
+app = FastAPI(title="Homework Tracker API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["http://localhost", "http://127.0.0.1"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -41,14 +48,6 @@ class TaskResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-@app.on_event("startup")
-def startup():
-    start_scheduler()
-
-@app.on_event("shutdown")
-def shutdown():
-    stop_scheduler()
 
 @app.post("/api/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -91,7 +90,7 @@ def get_tasks(
     end_date: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(Task)
+    query = db.query(Task).options(joinedload(Task.course))
     
     if status:
         if status == 'pending':
@@ -116,33 +115,31 @@ def get_tasks(
         try:
             start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
             query = query.filter(Task.due_date >= start_dt)
-        except:
+        except ValueError:
             pass
     
     if end_date:
         try:
             end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
             query = query.filter(Task.due_date <= end_dt)
-        except:
+        except ValueError:
             pass
     
     tasks = query.order_by(Task.due_date).all()
     
-    result = []
-    for task in tasks:
-        course = db.query(Course).filter(Course.id == task.course_id).first()
-        result.append(TaskResponse(
+    return [
+        TaskResponse(
             id=task.id,
             title=task.title,
-            course_name=course.name if course else "Unknown",
+            course_name=task.course.name if task.course else "Unknown",
             due_date=task.due_date,
             status=task.status,
             is_completed=task.is_completed,
             url=task.url,
             description=task.description
-        ))
-    
-    return result
+        )
+        for task in tasks
+    ]
 
 @app.patch("/api/tasks/{task_id}/complete")
 def toggle_complete(task_id: int, db: Session = Depends(get_db)):
