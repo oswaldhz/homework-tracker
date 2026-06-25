@@ -1264,20 +1264,19 @@ class MoodleService {
         return {'success': false, 'message': 'Could not find session key.'};
       }
 
-      // Step 2: POST to removesubmission action
-      await Logger.instance.log('REMOVE_SUB: POST removesubmission');
-      final removeResp = await client.post(
-        Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid&action=removesubmission'),
-        headers: _headers(),
-        body: {
-          'sesskey': sesskey,
-          'confirm': '1',
-        },
-      ).timeout(_requestTimeout);
+      // Step 2: First try GET-based removal (works on most Moodle versions)
+      await Logger.instance.log('REMOVE_SUB: Trying GET removesubmission');
+      const removeUrl = '/mod/assign/view.php';
+      final removeGetResp = await _get(client,
+        '$_baseUrl$removeUrl?id=$cmid&action=removesubmission&sesskey=$sesskey&confirm=1',
+      );
 
-      await Logger.instance.log('REMOVE_SUB: Response status: ${removeResp.statusCode}');
+      final getBody = removeGetResp.body.toLowerCase();
+      final removeSuccess = !getBody.contains('removesubmission') ||
+          getBody.contains('removed') ||
+          getBody.contains('submission has been removed');
 
-      // Step 3: Update local DB
+      // Step 3: Clear local DB regardless (best-effort remote)
       final db = await DatabaseService.instance.database;
       final existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
       if (existing.isNotEmpty) {
@@ -1290,9 +1289,27 @@ class MoodleService {
         }, where: 'url = ?', whereArgs: [taskUrl]);
       }
 
-      return {'success': true, 'message': 'Submission removed successfully.'};
+      await Logger.instance.log('REMOVE_SUB: Success=$removeSuccess');
+      return {
+        'success': removeSuccess,
+        'message': removeSuccess ? 'Submission removed successfully.' : 'Could not remove submission on Moodle server. Local data cleared.',
+      };
     } catch (e) {
       await Logger.instance.log('REMOVE_SUB: Exception: $e');
+      // Still try to clear local DB
+      try {
+        final db = await DatabaseService.instance.database;
+        final existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+        if (existing.isNotEmpty) {
+          await db.update('tasks', {
+            'file_uploaded': 0,
+            'is_submitted': 0,
+            'submission_files': '[]',
+            'submission_status': null,
+            'last_submission_check': DateTime.now().toIso8601String(),
+          }, where: 'url = ?', whereArgs: [taskUrl]);
+        }
+      } catch (_) {}
       return {'success': false, 'message': 'Failed to remove submission: $e'};
     } finally {
       client.close();

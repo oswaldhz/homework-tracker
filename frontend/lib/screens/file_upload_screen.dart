@@ -87,7 +87,6 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
         _statusMessage = null;
         _uploadSuccess = false;
       });
-      // Auto-upload the replacement
       await _uploadFile();
     }
   }
@@ -102,28 +101,36 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
       final api = context.read<ApiService>();
       final result = await api.removeSubmission(widget.task.id);
 
+      if (!mounted) return;
+
       setState(() {
         _removing = false;
-        if (result['success'] == true) {
-          _uploadSuccess = true;
-          _statusMessage = 'Submission removed successfully.';
-          _task = Task(
-            id: widget.task.id,
-            title: _task.title,
-            courseName: _task.courseName,
-            dueDate: _task.dueDate,
-            status: _task.status,
-            isCompleted: _task.isCompleted,
-          );
-        } else {
-          _statusMessage = result['message'] ?? 'Failed to remove submission.';
-        }
+        _task = Task(
+          id: widget.task.id,
+          title: widget.task.title,
+          courseName: widget.task.courseName,
+          dueDate: widget.task.dueDate,
+          status: widget.task.status,
+          isCompleted: widget.task.isCompleted,
+        );
+        _uploadSuccess = result['success'] == true;
+        _statusMessage = (result['success'] == true
+            ? 'Submission removed successfully.'
+            : '${result['message'] ?? 'Failed.'} Local data cleared.');
+        _selectedFile = null;
       });
+
+      if (result['success'] != true) {
+        // Always also update through the provider for consistency
+        await api.fetchTasks();
+      }
     } catch (e) {
-      setState(() {
-        _removing = false;
-        _statusMessage = 'Error: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _removing = false;
+          _statusMessage = 'Error: $e';
+        });
+      }
     }
   }
 
