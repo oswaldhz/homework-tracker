@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
+import 'package:path/path.dart' as path;
 import 'package:url_launcher/url_launcher.dart';
 import 'database_service.dart';
 import 'logger_service.dart';
@@ -743,6 +744,29 @@ class MoodleService {
       }
       await Logger.instance.log('UPLOAD: Found sesskey: $sesskey');
 
+      String? extractNumber(String source, List<RegExp> patterns) {
+        for (final pattern in patterns) {
+          final match = pattern.firstMatch(source);
+          if (match != null) return match.group(1);
+        }
+        return null;
+      }
+
+      final contextId = extractNumber(editResp.body, [
+        RegExp(r"""["']?contextid["']?\s*[:=]\s*["']?(\d+)"""),
+        RegExp(r"""["']?contextid["']?\s*,\s*["']?(\d+)"""),
+        RegExp(r"""ctx_id["']?\s*[:=]\s*["']?(\d+)"""),
+      ]);
+      final maxbytes = extractNumber(editResp.body, [
+        RegExp(r"""["']?maxbytes["']?\s*[:=]\s*["']?(-?\d+)"""),
+      ]);
+      final areamaxbytes = extractNumber(editResp.body, [
+        RegExp(r"""["']?areamaxbytes["']?\s*[:=]\s*["']?(-?\d+)"""),
+      ]);
+      await Logger.instance.log(
+        'UPLOAD: Upload context ctx_id=${contextId ?? "default"}, maxbytes=${maxbytes ?? "default"}',
+      );
+
       // Extract itemid from the file manager form
       int? itemid;
       final fileManagerForm = editDoc.querySelector('form[id^="filemanager"]') ?? editDoc.querySelector('form[action*="repository_ajax"]');
@@ -778,45 +802,44 @@ class MoodleService {
       // Step 2: Discover upload repository ID from filepicker HTML
       await Logger.instance.log('UPLOAD: Discovering upload repository');
 
-      final candidateRepoIds = <String>[];
-      void _tryAddId(String id) {
-        if (id.isNotEmpty && !candidateRepoIds.contains(id)) {
-          candidateRepoIds.add(id);
+      final uploadRepoIds = <String>[];
+      void tryAddUploadRepoId(String? id) {
+        final cleanId = id?.trim() ?? '';
+        if (cleanId.isNotEmpty && !uploadRepoIds.contains(cleanId)) {
+          uploadRepoIds.add(cleanId);
         }
       }
 
-      // Strategy A: always try repo_id=0 first (standard upload repository)
-      _tryAddId('0');
+      Future<void> findUploadReposInText(String source, String label) async {
+        final patterns = [
+          RegExp(r'"id"\s*:\s*"?(\d+)"?[\s\S]{0,800}?"type"\s*:\s*"upload"'),
+          RegExp(r'"type"\s*:\s*"upload"[\s\S]{0,800}?"id"\s*:\s*"?(\d+)"?'),
+          RegExp(r"""data-repositorytype=["']upload["'][^>]*data-repositoryid=["'](\d+)["']"""),
+          RegExp(r"""data-repositoryid=["'](\d+)["'][^>]*data-repositorytype=["']upload["']"""),
+        ];
 
-      // Strategy B: fetch the filepicker popup HTML and find the Upload repo tab
-      try {
-        final fpUrl = '$_baseUrl/repository/repository_ajax.php'
-            '?action=filepicker&sesskey=$sesskey&env=filemanager&itemid=$itemid';
-        final fpResp = await _get(client, fpUrl);
-        final fpBody = fpResp.body;
-
-        // Look for data-repositorytype="upload" on the tab element
-        final attrMatch = RegExp(
-          r"""data-repositorytype=["']?upload["']?[^>]*data-repositoryid=["']?(\d+)""",
-        ).firstMatch(fpBody);
-        if (attrMatch != null) {
-          _tryAddId(attrMatch.group(1)!);
-          await Logger.instance.log('UPLOAD: Found upload repo from filepicker tab: id=${attrMatch.group(1)}');
-        } else {
-          // Look for repo_upload_file input and go up to find form action
-          final formMatch = RegExp(
-            r'repository_ajax\.php\?.*?[&?]repo_id[=/](\d+)',
-          ).firstMatch(fpBody);
-          if (formMatch != null) {
-            _tryAddId(formMatch.group(1)!);
-            await Logger.instance.log('UPLOAD: Found upload repo from filepicker form: id=${formMatch.group(1)}');
+        for (final pattern in patterns) {
+          for (final match in pattern.allMatches(source)) {
+            tryAddUploadRepoId(match.group(1));
+            await Logger.instance.log('UPLOAD: Found upload repo from $label: id=${match.group(1)}');
           }
         }
+      }
+
+      await findUploadReposInText(editResp.body, 'edit page');
+
+      // Strategy A: fetch file picker data and find the Upload repo tab.
+      try {
+        final fpUrl = '$_baseUrl/repository/repository_ajax.php'
+            '?action=filepicker&sesskey=$sesskey&env=filemanager&itemid=$itemid'
+            '${contextId != null ? '&ctx_id=$contextId' : ''}';
+        final fpResp = await _get(client, fpUrl);
+        await findUploadReposInText(fpResp.body, 'filepicker');
       } catch (e) {
         await Logger.instance.log('UPLOAD: Filepicker fetch failed: $e');
       }
 
-      // Strategy C: parse repository list from JavaScript config on edit page
+      // Strategy B: parse repository list from JavaScript config on edit page.
       try {
         final initMatch = RegExp(
           r'M\.core_filepicker\.init\([^,]+,\s*(\{[\s\S]*?\})\s*\)',
@@ -827,7 +850,7 @@ class MoodleService {
           if (repos != null) {
             for (final r in repos) {
               if (r is Map && r['type'] == 'upload') {
-                _tryAddId(r['id'].toString());
+                tryAddUploadRepoId(r['id'].toString());
                 await Logger.instance.log('UPLOAD: Found upload repo from JS config: id=${r['id']}');
               }
             }
@@ -837,18 +860,23 @@ class MoodleService {
         await Logger.instance.log('UPLOAD: JS config parse failed: $e');
       }
 
-      // Strategy D: call repositories API with context ID
+      // Strategy C: call repositories API with context ID.
       try {
-        final ctxMatch = RegExp(r"""["']?contextid["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
-        final ctxId = ctxMatch?.group(1) ?? '';
         final repoListUrl = '$_baseUrl/repository/repository_ajax.php'
-            '?action=repositories&sesskey=$sesskey${ctxId.isNotEmpty ? '&ctx_id=$ctxId' : ''}';
+            '?action=repositories&sesskey=$sesskey${contextId != null ? '&ctx_id=$contextId' : ''}';
         final repoResp = await _get(client, repoListUrl);
         final repoData = jsonDecode(repoResp.body);
-        if (repoData is List) {
-          for (final repo in repoData) {
+
+        final repos = repoData is List
+            ? repoData
+            : repoData is Map
+                ? (repoData['repositories'] as List? ?? repoData['list'] as List? ?? const [])
+                : const [];
+
+        for (final repo in repos) {
+          if (repo is Map) {
             if (repo['type'] == 'upload') {
-              _tryAddId(repo['id'].toString());
+              tryAddUploadRepoId(repo['id'].toString());
               await Logger.instance.log('UPLOAD: Found upload repo from API: name=${repo['name']}, id=${repo['id']}');
             }
           }
@@ -857,34 +885,74 @@ class MoodleService {
         await Logger.instance.log('UPLOAD: Repo API failed: $e');
       }
 
-      // Strategy E: extract repo_id from page HTML
-      try {
-        final pageMatch = RegExp(r"""repo_id["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
-        if (pageMatch != null) {
-          _tryAddId(pageMatch.group(1)!);
-        }
-        final repoInput = editDoc.querySelector('input[name="repo_id"], select[name="repo_id"]');
-        if (repoInput != null) {
-          final val = repoInput.attributes['value'];
-          if (val != null && val.isNotEmpty) {
-            _tryAddId(val);
-          }
-        }
-      } catch (_) {}
+      await Logger.instance.log('UPLOAD: Upload repo_ids: $uploadRepoIds');
 
-      // Strategy F: common fallback IDs (not already added)
-      for (final id in ['1', '2', '3', '4', '5', '6', '7']) {
-        _tryAddId(id);
+      if (uploadRepoIds.isEmpty) {
+        await Logger.instance.log('UPLOAD: No upload repository found');
+        return {
+          'success': false,
+          'open_in_browser': true,
+          'url': taskUrl,
+          'message': 'Could not find Moodle\'s upload repository for this assignment. Please upload in your browser.',
+        };
       }
-
-      await Logger.instance.log('UPLOAD: Candidate repo_ids: $candidateRepoIds');
 
       // Step 3: Upload file to Moodle draft area (repository)
       await Logger.instance.log('UPLOAD: Uploading file to draft area');
 
       final uploadUrl = '$_baseUrl/repository/repository_ajax.php';
+      final originalFilename = path.basename(filePath);
 
-      Future<Map<String, dynamic>> _tryUpload(String rid) async {
+      int? asInt(dynamic value) {
+        if (value is int) return value;
+        if (value == null) return null;
+        return int.tryParse(value.toString());
+      }
+
+      String? asNonEmptyString(dynamic value) {
+        final text = value?.toString();
+        if (text == null || text.isEmpty) return null;
+        return text;
+      }
+
+      Map<String, dynamic>? parseUploadSuccess(dynamic data) {
+        final payload = data is List && data.isNotEmpty ? data.first : data;
+        if (payload is! Map) return null;
+
+        final itemIdFromResponse = asInt(payload['itemid'] ?? payload['id']);
+        final filenameFromResponse = asNonEmptyString(payload['filename'] ?? payload['file']);
+        if (itemIdFromResponse != null || filenameFromResponse != null || payload['url'] != null) {
+          return {
+            'itemid': itemIdFromResponse ?? itemid,
+            'filename': filenameFromResponse ?? originalFilename,
+          };
+        }
+
+        if (payload['event'] == 'fileexists') {
+          final newFile = payload['newfile'];
+          if (newFile is Map) {
+            return {
+              'itemid': itemid,
+              'filename': asNonEmptyString(newFile['filename']) ?? originalFilename,
+            };
+          }
+        }
+
+        return null;
+      }
+
+      String parseUploadError(String body) {
+        try {
+          final data = jsonDecode(body);
+          if (data is Map) {
+            final error = data['error'] ?? data['errorcode'] ?? data['message'];
+            if (error != null) return error.toString();
+          }
+        } catch (_) {}
+        return body.substring(0, body.length.clamp(0, 200));
+      }
+
+      Future<Map<String, dynamic>> tryUpload(String rid) async {
         final file = await http.MultipartFile.fromPath('repo_upload_file', filePath);
         final uploadRequest = http.MultipartRequest('POST', Uri.parse(uploadUrl))
           ..headers.addAll({..._headers(), 'Accept': 'application/json, text/plain, */*'})
@@ -893,8 +961,14 @@ class MoodleService {
           ..fields['repo_id'] = rid
           ..fields['env'] = 'filemanager'
           ..fields['itemid'] = itemid.toString()
+          ..fields['title'] = originalFilename
+          ..fields['savepath'] = '/'
           ..fields['author'] = username
           ..files.add(file);
+
+        if (contextId != null) uploadRequest.fields['ctx_id'] = contextId;
+        if (maxbytes != null) uploadRequest.fields['maxbytes'] = maxbytes;
+        if (areamaxbytes != null) uploadRequest.fields['areamaxbytes'] = areamaxbytes;
 
         await Logger.instance.log('UPLOAD: Trying repo_id=$rid');
         final stream = await client.send(uploadRequest).timeout(const Duration(seconds: 60));
@@ -906,23 +980,19 @@ class MoodleService {
 
         try {
           final data = jsonDecode(body);
-          if (data is List && data.isNotEmpty) {
-            return {
-              'itemid': data[0]['itemid'] as int? ?? itemid,
-              'filename': data[0]['filename'] as String?,
-            };
-          } else if (data is Map && (data['itemid'] != null || data['filename'] != null)) {
-            return {
-              'itemid': data['itemid'] as int? ?? itemid,
-              'filename': data['filename'] as String?,
-            };
+          final success = parseUploadSuccess(data);
+          if (success != null) return success;
+
+          if (data is Map && data['error'] != null) {
+            await Logger.instance.log('UPLOAD: Moodle error for repo_id=$rid: ${data['error']}');
+            return {'error': data['error'].toString()};
           }
         } catch (_) {}
 
         // Check for errors in response
         if (body.contains('error') || body.contains('Error') || body.contains('not logged in') || body.contains('invalid')) {
           await Logger.instance.log('UPLOAD: Error in response for repo_id=$rid');
-          return {'error': body.substring(0, body.length.clamp(0, 200))};
+          return {'error': parseUploadError(body)};
         }
 
         if (resp.statusCode != 200) {
@@ -937,11 +1007,12 @@ class MoodleService {
       String lastError = '';
       String usedRepoId = '';
 
-      for (final rid in candidateRepoIds) {
-        final result = await _tryUpload(rid);
+      for (final rid in uploadRepoIds) {
+        final result = await tryUpload(rid);
         uploadedItemid = result['itemid'] as int?;
         uploadedFilename = result['filename'] as String?;
-        lastError = result['error'] as String? ?? '';
+        final error = result['error'] as String?;
+        if (error != null && error.isNotEmpty) lastError = error;
         if (uploadedItemid != null || uploadedFilename != null) {
           usedRepoId = rid;
           await Logger.instance.log('UPLOAD: Success with repo_id=$rid');
@@ -1017,7 +1088,7 @@ class MoodleService {
       if (existing.isNotEmpty) {
         final submissionFiles = [
           {
-            'filename': uploadedFilename ?? submittedFileName ?? filePath.split('/').last,
+            'filename': uploadedFilename ?? submittedFileName ?? originalFilename,
             'size': await File(filePath).length(),
             'uploaded_at': DateTime.now().toIso8601String(),
             'itemid': finalItemid,
@@ -1038,7 +1109,7 @@ class MoodleService {
       return {
         'success': true, 
         'message': hasSubmission ? 'File uploaded and submission saved' : 'File uploaded (submission may need verification)',
-        'filename': uploadedFilename ?? filePath.split('/').last,
+        'filename': uploadedFilename ?? originalFilename,
         'verified': hasSubmission,
       };
     } catch (e) {
