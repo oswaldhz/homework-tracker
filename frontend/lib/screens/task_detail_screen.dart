@@ -211,13 +211,27 @@ class TaskDetailScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonalIcon(
-                  onPressed: () {
-                    Navigator.push(
+                  onPressed: () async {
+                    final result = await Navigator.push<bool>(
                       context,
                       MaterialPageRoute(
                         builder: (context) => FileUploadScreen(task: task),
                       ),
                     );
+                    if (result == true && context.mounted) {
+                      final fresh = context.read<ApiService>().tasks.where((t) => t.id == task.id).firstOrNull;
+                      if (fresh != null) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TaskDetailScreen(
+                              task: fresh,
+                              onToggleComplete: onToggleComplete,
+                            ),
+                          ),
+                        );
+                      }
+                    }
                   },
                   icon: const Icon(Icons.upload_file),
                   label: const Text('Upload Homework'),

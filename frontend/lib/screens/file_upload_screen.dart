@@ -267,6 +267,17 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                           ],
                         ),
                       ),
+                      if (_uploadSuccess) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => Navigator.pop(context, true),
+                            icon: const Icon(Icons.visibility),
+                            label: const Text('View Uploaded File'),
+                          ),
+                        ),
+                      ],
                       if (_openInBrowser && _browserUrl != null) ...[
                         const SizedBox(height: 12),
                         SizedBox(
