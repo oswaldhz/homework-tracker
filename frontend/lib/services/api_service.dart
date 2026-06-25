@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task.dart';
@@ -112,6 +113,9 @@ class ApiService extends ChangeNotifier {
         }
         await fetchTasks();
         await fetchCourses();
+        // Background-sync submission details so file URLs show immediately
+        _syncAllSubmissions(moodleUrl, username, password,
+            sessionCookie: sessionCookie);
         return {'success': true, 'message': 'Login successful', 'tasks_found': result['count']};
       } else {
         return {'success': false, 'message': result['message'] ?? 'Login failed'};
@@ -160,7 +164,9 @@ class ApiService extends ChangeNotifier {
         isCompleted: (data['is_completed'] as int? ?? 0) == 1,
         fileUploaded: (data['file_uploaded'] as int? ?? 0) == 1,
         isSubmitted: (data['is_submitted'] as int? ?? 0) == 1,
-        submissionFiles: [],
+        submissionFiles: data['submission_files'] != null 
+            ? (jsonDecode(data['submission_files'] as String) as List).cast<Map<String, dynamic>>()
+            : [],
         submissionStatus: data['submission_status'] as String?,
         quizGrade: (data['quiz_grade'] as num?)?.toDouble(),
         quizFeedback: data['quiz_feedback'] as String?,
@@ -289,6 +295,9 @@ class ApiService extends ChangeNotifier {
         await fetchTasks();
         await fetchStats();
         await fetchCourses();
+        // Background-sync submission status for all tasks
+        _syncAllSubmissions(cred['moodle_url'], username, password,
+            sessionCookie: sessionCookie);
         return true;
       }
       return false;
@@ -434,6 +443,42 @@ class ApiService extends ChangeNotifier {
         password,
         task['url'],
         filePath,
+        sessionCookie: sessionCookie,
+      );
+
+      if (result['success'] == true) {
+        await fetchTasks();
+      }
+
+      return result;
+    } catch (e) {
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> removeSubmission(int taskId) async {
+    try {
+      final task = await DatabaseService.instance.getTask(taskId);
+      if (task == null) return {'success': false, 'message': 'Task not found'};
+
+      final cred = await DatabaseService.instance.getCredentials();
+      if (cred == null) return {'success': false, 'message': 'No credentials saved'};
+
+      String username, password;
+      try {
+        username = await AuthService.instance.decrypt(cred['encrypted_username']);
+        password = await AuthService.instance.decrypt(cred['encrypted_password']);
+      } catch (e) {
+        return {'success': false, 'message': e.toString().replaceFirst('Exception: ', '')};
+      }
+      final loginType = cred['login_type'] as String? ?? 'moodle';
+      final sessionCookie = loginType == 'office365' ? password : null;
+
+      final result = await MoodleService.instance.removeSubmission(
+        cred['moodle_url'],
+        username,
+        password,
+        task['url'],
         sessionCookie: sessionCookie,
       );
 
@@ -598,6 +643,35 @@ class ApiService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Background sync error: $e');
+    }
+  }
+
+  Future<void> _syncAllSubmissions(
+    String moodleUrl,
+    String username,
+    String password, {
+    String? sessionCookie,
+  }) async {
+    try {
+      final tasks = await DatabaseService.instance.getTasks();
+      for (final task in tasks) {
+        final url = task['url'] as String?;
+        if (url == null || url.isEmpty) continue;
+        if (!url.contains('/mod/assign/')) continue;
+
+        await MoodleService.instance.checkSubmissionStatus(
+          moodleUrl,
+          username,
+          password,
+          url,
+          sessionCookie: sessionCookie,
+        );
+      }
+      // Refresh task list with updated submission data
+      await fetchTasks();
+      await fetchStats();
+    } catch (e) {
+      debugPrint('Sync all submissions error: $e');
     }
   }
 }

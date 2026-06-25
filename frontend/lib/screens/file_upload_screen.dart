@@ -21,6 +21,7 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
   PlatformFile? _selectedFile;
   bool _uploading = false;
   bool _syncing = false;
+  bool _removing = false;
   String? _statusMessage;
   bool _uploadSuccess = false;
   bool _openInBrowser = false;
@@ -71,6 +72,58 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
       // Silent — sync is just a convenience, not required
     } finally {
       if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  Future<void> _pickAndReplaceFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar', 'jpg', 'png'],
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      setState(() {
+        _selectedFile = result.files.first;
+        _statusMessage = null;
+        _uploadSuccess = false;
+      });
+      // Auto-upload the replacement
+      await _uploadFile();
+    }
+  }
+
+  Future<void> _removeSubmission() async {
+    setState(() {
+      _removing = true;
+      _statusMessage = null;
+    });
+
+    try {
+      final api = context.read<ApiService>();
+      final result = await api.removeSubmission(widget.task.id);
+
+      setState(() {
+        _removing = false;
+        if (result['success'] == true) {
+          _uploadSuccess = true;
+          _statusMessage = 'Submission removed successfully.';
+          _task = Task(
+            id: widget.task.id,
+            title: _task.title,
+            courseName: _task.courseName,
+            dueDate: _task.dueDate,
+            status: _task.status,
+            isCompleted: _task.isCompleted,
+          );
+        } else {
+          _statusMessage = result['message'] ?? 'Failed to remove submission.';
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _removing = false;
+        _statusMessage = 'Error: $e';
+      });
     }
   }
 
@@ -222,20 +275,18 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _task.url != null
-                                  ? () => launchUrl(Uri.parse(_task.url!), mode: LaunchMode.externalApplication)
-                                  : null,
-                              icon: const Icon(Icons.edit, size: 18),
-                              label: const Text('Edit Submission'),
+                              onPressed: _uploading ? null : () => _pickAndReplaceFile(),
+                              icon: const Icon(Icons.swap_horiz, size: 18),
+                              label: const Text('Replace File'),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _task.url != null
-                                  ? () => launchUrl(Uri.parse(_task.url!), mode: LaunchMode.externalApplication)
-                                  : null,
-                              icon: const Icon(Icons.delete_outline, size: 18),
+                              onPressed: _removing ? null : _removeSubmission,
+                              icon: _removing
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.delete_outline, size: 18),
                               label: const Text('Delete Submission'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.red.shade700,

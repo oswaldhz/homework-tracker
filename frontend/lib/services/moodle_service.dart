@@ -1234,6 +1234,71 @@ class MoodleService {
     }
   }
 
+  Future<Map<String, dynamic>> removeSubmission(
+    String moodleUrl,
+    String username,
+    String password,
+    String taskUrl, {
+    String? sessionCookie,
+  }) async {
+    final client = _createClient();
+    try {
+      await Logger.instance.log('REMOVE_SUB: Starting remove submission for $taskUrl');
+
+      if (sessionCookie != null && sessionCookie.isNotEmpty) {
+        await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+      } else {
+        await _login(moodleUrl, username, password);
+      }
+
+      final uri = Uri.parse(taskUrl);
+      final cmid = uri.queryParameters['id'];
+      if (cmid == null) {
+        return {'success': false, 'message': 'Invalid task URL.'};
+      }
+
+      // Step 1: Get the assignment page to find sesskey
+      final assignResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
+      final sesskey = _extractSesskey(assignResp.body);
+      if (sesskey == null) {
+        return {'success': false, 'message': 'Could not find session key.'};
+      }
+
+      // Step 2: POST to removesubmission action
+      await Logger.instance.log('REMOVE_SUB: POST removesubmission');
+      final removeResp = await client.post(
+        Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid&action=removesubmission'),
+        headers: _headers(),
+        body: {
+          'sesskey': sesskey,
+          'confirm': '1',
+        },
+      ).timeout(_requestTimeout);
+
+      await Logger.instance.log('REMOVE_SUB: Response status: ${removeResp.statusCode}');
+
+      // Step 3: Update local DB
+      final db = await DatabaseService.instance.database;
+      final existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+      if (existing.isNotEmpty) {
+        await db.update('tasks', {
+          'file_uploaded': 0,
+          'is_submitted': 0,
+          'submission_files': '[]',
+          'submission_status': null,
+          'last_submission_check': DateTime.now().toIso8601String(),
+        }, where: 'url = ?', whereArgs: [taskUrl]);
+      }
+
+      return {'success': true, 'message': 'Submission removed successfully.'};
+    } catch (e) {
+      await Logger.instance.log('REMOVE_SUB: Exception: $e');
+      return {'success': false, 'message': 'Failed to remove submission: $e'};
+    } finally {
+      client.close();
+    }
+  }
+
   Future<Map<String, dynamic>> getQuizQuestions(
     String moodleUrl,
     String username,
