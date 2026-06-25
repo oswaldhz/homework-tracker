@@ -26,8 +26,20 @@ backend/verify_*.py
 backend/check_*.py
 backend/simple_*.py
 backend/debug_login.py
+backend/debug_*
+backend/file_picker_*
+backend/upload_*
+backend/repositories_*
+backend/*.png
+backend/*.txt
 debug_upload.html
 *.spec
+
+# Browser data artifacts
+backend/browser_data/
+
+# Installer output
+installer/installer_output/
 
 # Secrets & local data
 .encryption_key
