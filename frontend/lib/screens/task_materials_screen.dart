@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import '../models/task.dart';
 import '../services/api_service.dart';
+import 'login_screen.dart';
 
 class TaskMaterialsScreen extends StatefulWidget {
   final Task task;
@@ -54,9 +55,10 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
   }
 
   Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('Failed to launch $url: $e');
     }
   }
 
@@ -156,14 +158,41 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.orange.shade300),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      credentialError,
-                      style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
+                  Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          credentialError,
+                          style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final api = context.read<ApiService>();
+                        await api.logout();
+                        if (context.mounted) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                            (route) => false,
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.login, size: 18),
+                      label: const Text('Go to Login'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange.shade700,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                   ),
                 ],

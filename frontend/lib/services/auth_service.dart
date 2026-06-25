@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:encrypt/encrypt.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   static final AuthService instance = AuthService._();
@@ -13,21 +12,13 @@ class AuthService {
   Future<void> _initKey() async {
     if (_key != null) return;
 
-    final appDataDir = await getApplicationSupportDirectory();
-    final keyDir = Directory(p.join(appDataDir.path, 'HomeworkTracker'));
-    if (!await keyDir.exists()) {
-      await keyDir.create(recursive: true);
-    }
+    final prefs = await SharedPreferences.getInstance();
+    String? keyBase64 = prefs.getString('encryption_key');
 
-    final keyFile = File(p.join(keyDir.path, '.encryption_key'));
-
-    String keyBase64;
-    if (await keyFile.exists()) {
-      keyBase64 = await keyFile.readAsString();
-    } else {
+    if (keyBase64 == null || keyBase64.length != 44) {
       final newKey = Key.fromSecureRandom(32);
       keyBase64 = newKey.base64;
-      await keyFile.writeAsString(keyBase64);
+      await prefs.setString('encryption_key', keyBase64);
     }
 
     _key = Key.fromBase64(keyBase64);
