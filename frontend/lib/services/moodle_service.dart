@@ -794,11 +794,11 @@ class MoodleService {
 
       // Step 2: Upload file to Moodle draft area (repository)
       await Logger.instance.log('UPLOAD: Uploading file to draft area');
-      final file = await http.MultipartFile.fromPath('repo_upload_file', filePath);
 
       final uploadUrl = '$_baseUrl/repository/repository_ajax.php';
 
       Future<Map<String, dynamic>> _tryUpload(String rid) async {
+        final file = await http.MultipartFile.fromPath('repo_upload_file', filePath);
         final uploadRequest = http.MultipartRequest('POST', Uri.parse(uploadUrl))
           ..headers.addAll({..._headers(), 'Accept': 'application/json, text/plain, */*'})
           ..fields['action'] = 'upload'

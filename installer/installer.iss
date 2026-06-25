@@ -55,3 +55,38 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
+Type: filesandordirs; Name: "{userappdata}\HomeworkTracker"
+Type: filesandordirs; Name: "{localappdata}\HomeworkTracker"
+
+[Code]
+var
+  DeleteDataPage: TInputOptionWizardPage;
+
+procedure InitializeWizard;
+begin
+  DeleteDataPage := CreateInputOptionPage(wpSelectTasks,
+    'Delete Application Data',
+    'Remove your saved Moodle credentials and app data?',
+    'Check the box below if you want to delete all saved credentials, ' +
+    'encryption keys, and app data files. Leave unchecked to keep your data for a future installation.',
+    True, False);
+  DeleteDataPage.Add('Delete all app data and saved credentials');
+  DeleteDataPage.Values[0] := False;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  AppDataPath: string;
+  LocalAppDataPath: string;
+begin
+  if CurUninstallStep = usUninstall then begin
+    if DeleteDataPage.Values[0] then begin
+      AppDataPath := ExpandConstant('{userappdata}') + '\HomeworkTracker';
+      LocalAppDataPath := ExpandConstant('{localappdata}') + '\HomeworkTracker';
+      if DirExists(AppDataPath) then
+        DelTree(AppDataPath, True, True, True);
+      if DirExists(LocalAppDataPath) then
+        DelTree(LocalAppDataPath, True, True, True);
+    end;
+  end;
+end;
