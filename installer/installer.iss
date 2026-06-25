@@ -4,7 +4,7 @@
 #define MyAppName "Homework Tracker"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Homework Tracker"
-#define MyAppURL "https://github.com/yourusername/homework-tracker"
+#define MyAppURL "https://github.com/oswaldhz/homework-tracker"
 #define MyAppExeName "homework_tracker.exe"
 
 [Setup]
