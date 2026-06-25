@@ -725,6 +725,7 @@ class MoodleService {
     String password,
     String taskUrl,
     String filePath, {
+    int? taskId,
     String? sessionCookie,
   }) async {
     final client = _createClient();
@@ -1190,8 +1191,14 @@ class MoodleService {
 
       // Update local DB with submission info
       final db = await DatabaseService.instance.database;
-      final existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+      List<Map<String, dynamic>> existing;
+      if (taskId != null) {
+        existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+      } else {
+        existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+      }
       if (existing.isNotEmpty) {
+        final matchId = existing.first['id'] as int;
         final submissionFiles = submissionFilesWithUrls.isNotEmpty
             ? submissionFilesWithUrls
             : [
@@ -1211,7 +1218,7 @@ class MoodleService {
             'submission_status': submissionStatus ?? 'Submitted via app',
             'last_submission_check': DateTime.now().toIso8601String(),
           },
-          where: 'url = ?', whereArgs: [taskUrl],
+          where: 'id = ?', whereArgs: [matchId],
         );
       }
 
@@ -1239,6 +1246,7 @@ class MoodleService {
     String username,
     String password,
     String taskUrl, {
+    int? taskId,
     String? sessionCookie,
   }) async {
     final client = _createClient();
@@ -1278,15 +1286,21 @@ class MoodleService {
 
       // Step 3: Clear local DB regardless (best-effort remote)
       final db = await DatabaseService.instance.database;
-      final existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+      List<Map<String, dynamic>> existing;
+      if (taskId != null) {
+        existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+      } else {
+        existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+      }
       if (existing.isNotEmpty) {
+        final matchId = existing.first['id'] as int;
         await db.update('tasks', {
           'file_uploaded': 0,
           'is_submitted': 0,
           'submission_files': '[]',
           'submission_status': null,
           'last_submission_check': DateTime.now().toIso8601String(),
-        }, where: 'url = ?', whereArgs: [taskUrl]);
+        }, where: 'id = ?', whereArgs: [matchId]);
       }
 
       await Logger.instance.log('REMOVE_SUB: Success=$removeSuccess');
@@ -1299,15 +1313,21 @@ class MoodleService {
       // Still try to clear local DB
       try {
         final db = await DatabaseService.instance.database;
-        final existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+        List<Map<String, dynamic>> existing;
+        if (taskId != null) {
+          existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+        } else {
+          existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+        }
         if (existing.isNotEmpty) {
+          final matchId = existing.first['id'] as int;
           await db.update('tasks', {
             'file_uploaded': 0,
             'is_submitted': 0,
             'submission_files': '[]',
             'submission_status': null,
             'last_submission_check': DateTime.now().toIso8601String(),
-          }, where: 'url = ?', whereArgs: [taskUrl]);
+          }, where: 'id = ?', whereArgs: [matchId]);
         }
       } catch (_) {}
       return {'success': false, 'message': 'Failed to remove submission: $e'};
@@ -1342,6 +1362,7 @@ class MoodleService {
     String username,
     String password,
     String taskUrl, {
+    int? taskId,
     String? sessionCookie,
   }) async {
     final client = _createClient();
@@ -1364,6 +1385,22 @@ class MoodleService {
       bool hasSubmission = false;
       String? submissionStatus;
       List<Map<String, dynamic>> submissionFiles = [];
+      String? quizGrade;
+      String? quizFeedback;
+
+      // --- Q) Quiz-specific check ---
+      if (taskUrl.contains('/mod/quiz/')) {
+        try {
+          final gradeEl = assignDoc.querySelector('.graded, .quizgraded, .grade');
+          if (gradeEl != null) {
+            final g = gradeEl.text.trim();
+            if (g.contains('/')) {
+              quizGrade = g;
+              quizFeedback = g;
+            }
+          }
+        } catch (_) {}
+      }
 
       // --- 1) Detect submission status from status text elements ---
       final statusEl = assignDoc.querySelector('[class*="submissionstatustext"], [class*="submissionstatus"], [class*="submission_status"], [data-region*="submission-status"]');
@@ -1394,10 +1431,8 @@ class MoodleService {
         final href = link.attributes['href'];
         if (href == null) continue;
 
-        // Try to extract filename: (a) link text, (b) parent li/div text, (c) URL basename
         String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
 
-        // If empty, check nearby elements (sibling spans, parent li, etc.)
         if (filename.isEmpty || filename == 'Download' || filename == 'download') {
           final parent = link.parent;
           if (parent != null) {
@@ -1408,7 +1443,6 @@ class MoodleService {
           }
         }
 
-        // Fall back to URL basename (last path segment)
         if (filename.isEmpty || filename.length > 200) {
           final segments = href.split('/');
           filename = Uri.decodeComponent(segments.lastWhere((s) => s.contains('.'), orElse: () => segments.last));
@@ -1427,7 +1461,6 @@ class MoodleService {
 
       // Also check for file entries with a download icon or list structure
       if (submissionFiles.isEmpty) {
-        // Look in submission-specific regions
         final subRegions = assignDoc.querySelectorAll('[data-region*="submission"], .submission-received-files, .submissionplugins, .fileuploadsubmission, ul.submission-files');
         for (final region in subRegions) {
           final links = region.querySelectorAll('a');
@@ -1448,20 +1481,22 @@ class MoodleService {
             });
           }
         }
-        // Log the HTML for debugging if still no files
         if (submissionFiles.isEmpty && hasSubmission) {
           await Logger.instance.log('SYNC DEBUG: No files found on assignment page. HTML snippet: ${assignResp.body.substring(0, assignResp.body.length.clamp(0, 3000))}');
         }
       }
 
-      // --- 4) Check for online text submission ---
+      // --- 4) Check for actual online text submission (NOT homework description) ---
       bool hasOnlineText = false;
       String? onlineTextContent;
-      for (final sel in ['.online_text', '.onlinetext', '.submission_onlinetext', '.no-overflow', '.singlesubmission', '[data-region*="submission-content"]']) {
+      // Only check elements that are specifically the text submission, not generic page content
+      for (final sel in ['.online_text', '.onlinetext', '.submission_onlinetext', '[data-region*="submission-content"] .no-overflow']) {
         final el = assignDoc.querySelector(sel);
         if (el != null) {
           final text = el.text.trim();
-          if (text.isNotEmpty && text.length > 20) {
+          // Online text submissions are typically longer than 50 chars
+          // and are found within the submission area, not the description area
+          if (text.isNotEmpty && text.length > 50 && !text.startsWith('Description')) {
             hasOnlineText = true;
             onlineTextContent = text;
             break;
@@ -1478,44 +1513,16 @@ class MoodleService {
         });
       }
 
-      // --- 5) FALLBACK: detect "Submission" heading + any text on the page ---
-      if (!hasSubmission) {
-        final subHeading = assignDoc.querySelector('h2, h3, h4, .submission-header, [data-region="submission-header"]');
-        if (subHeading != null && subHeading.text.trim().toLowerCase().contains('submission')) {
-          final nextEl = subHeading.nextElementSibling ?? subHeading.parent?.nextElementSibling;
-          if (nextEl != null && nextEl.text.trim().length > 10) {
-            hasSubmission = true;
-            submissionStatus = 'Submitted';
-          }
-        }
-      }
-
-      // Check quiz grade if it's a quiz
-      double? quizGrade;
-      String? quizFeedback;
-      if (taskUrl.contains('/mod/quiz/')) {
-        final quizResp = await _get(client, '$_baseUrl/mod/quiz/report.php?id=$cmid');
-        final quizDoc = html_parser.parse(quizResp.body);
-
-        final gradeEl = quizDoc.querySelector('.grade, .quiz-grade, [class*="grade"]');
-        if (gradeEl != null) {
-          final gradeText = gradeEl.text.trim();
-          final gradeMatch = RegExp(r'(\d+(?:\.\d+)?)%?').firstMatch(gradeText);
-          if (gradeMatch != null) {
-            quizGrade = double.tryParse(gradeMatch.group(1)!);
-          }
-        }
-
-        final feedbackEl = quizDoc.querySelector('.feedback, .quiz-feedback');
-        if (feedbackEl != null) {
-          quizFeedback = feedbackEl.text.trim();
-        }
-      }
-
-      // Update / clear local DB
+      // Update / clear local DB using taskId (preferred) or URL (fallback)
       final db = await DatabaseService.instance.database;
-      final existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+      List<Map<String, dynamic>> existing;
+      if (taskId != null) {
+        existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+      } else {
+        existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+      }
       if (existing.isNotEmpty) {
+        final matchId = existing.first['id'] as int;
         final updates = <String, dynamic>{
           'last_submission_check': DateTime.now().toIso8601String(),
         };
@@ -1528,7 +1535,6 @@ class MoodleService {
             updates['submission_status'] = submissionStatus;
           }
         } else {
-          // Clear stale submission data when Moodle shows no submission
           updates['file_uploaded'] = 0;
           updates['is_submitted'] = 0;
           updates['submission_files'] = '[]';
@@ -1538,7 +1544,7 @@ class MoodleService {
         if (quizGrade != null) updates['quiz_grade'] = quizGrade;
         if (quizFeedback != null) updates['quiz_feedback'] = quizFeedback;
 
-        await db.update('tasks', updates, where: 'url = ?', whereArgs: [taskUrl]);
+        await db.update('tasks', updates, where: 'id = ?', whereArgs: [matchId]);
       }
 
       return {

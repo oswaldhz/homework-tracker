@@ -443,6 +443,7 @@ class ApiService extends ChangeNotifier {
         password,
         task['url'],
         filePath,
+        taskId: taskId,
         sessionCookie: sessionCookie,
       );
 
@@ -479,6 +480,7 @@ class ApiService extends ChangeNotifier {
         username,
         password,
         task['url'],
+        taskId: taskId,
         sessionCookie: sessionCookie,
       );
 
@@ -664,6 +666,7 @@ class ApiService extends ChangeNotifier {
           username,
           password,
           url,
+          taskId: task['id'] as int,
           sessionCookie: sessionCookie,
         );
       }

@@ -61,6 +61,7 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
         username,
         password,
         _task.url!,
+        taskId: _task.id,
         sessionCookie: sessionCookie,
       );
 

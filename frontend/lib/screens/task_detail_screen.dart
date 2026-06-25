@@ -566,6 +566,7 @@ class TaskDetailScreen extends StatelessWidget {
         username,
         password,
         task.url!,
+        taskId: task.id,
         sessionCookie: sessionCookie,
       );
       
