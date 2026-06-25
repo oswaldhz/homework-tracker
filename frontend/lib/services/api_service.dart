@@ -25,18 +25,29 @@ class ApiService extends ChangeNotifier {
 
   Future<bool> hasCredentials() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      if (!prefs.containsKey('moodle_url')) return false;
-      final cred = await DatabaseService.instance.getCredentials();
-      if (cred == null) return false;
-      try {
-        await AuthService.instance.decrypt(cred['encrypted_username']);
-        await AuthService.instance.decrypt(cred['encrypted_password']);
-        return true;
-      } catch (_) {
-        await clearCredentials();
-        return false;
+      // Check database first (persists across sessions on Windows)
+      var cred = await DatabaseService.instance.getCredentials();
+      if (cred != null) {
+        try {
+          await AuthService.instance.decrypt(cred['encrypted_username'] as String);
+          await AuthService.instance.decrypt(cred['encrypted_password'] as String);
+          return true;
+        } catch (_) {
+          // Old key — credential is stale, remove it
+          await DatabaseService.instance.clearAllCredentials();
+          cred = null;
+        }
       }
+
+      // Fallback to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      if (!prefs.containsKey('moodle_url')) return cred != null;
+      if (cred == null) {
+        // DB had no credential but prefs says we're logged in
+        final dbCred = await DatabaseService.instance.getCredentials();
+        return dbCred != null;
+      }
+      return true;
     } catch (_) {
       return false;
     }

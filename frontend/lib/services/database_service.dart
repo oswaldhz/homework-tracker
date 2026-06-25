@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'logger_service.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._();
@@ -255,6 +256,11 @@ class DatabaseService {
         'created_at': DateTime.now().toIso8601String(),
       });
     }
+
+    // Verify the save persisted
+    final verify = await db.query('credentials');
+    final count = verify.length;
+    await Logger.instance.log('DB_SAVE_CRED: table has $count rows after save');
   }
 
   Future<List<Map<String, dynamic>>> getAllSavedCredentials() async {
