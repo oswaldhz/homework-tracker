@@ -195,7 +195,7 @@ build_installer.bat        # Requires Inno Setup 6+
 | Step | Action |
 |---|---|
 | 1️⃣ | Launch the app |
-| 2️⃣ | Enter your Moodle URL (e.g., `https://aulavirtual.itla.edu.do`) |
+| 2️⃣ | Enter your Moodle URL  |
 | 3️⃣ | Type your username and password |
 | 4️⃣ | ✅ Check **Remember Me** to save credentials (encrypted) |
 | 5️⃣ | 🔄 If your school uses **Office 365 SSO**, the app auto-detects and redirects |
