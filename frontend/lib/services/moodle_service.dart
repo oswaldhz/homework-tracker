@@ -1084,32 +1084,10 @@ class MoodleService {
       // Step 3: Submit the assignment with the uploaded file reference
       await Logger.instance.log('UPLOAD: Submitting assignment with savesubmission');
 
-      // Extract the actual file manager field name from the edit form.
-      // Moodle uses plugin-specific names like `assignsubmission_file_filemanager`.
-      String fileManagerFieldName = 'files_filemanager';
-      {
-        final form = editDoc.querySelector('form#mod_assign_submission_form, form[action*="view.php"], form[action*="editsubmission"]');
-        if (form != null) {
-          final fmInput = form.querySelector('input[type="hidden"][name\$="filemanager"]');
-          if (fmInput != null) {
-            final name = fmInput.attributes['name'];
-            if (name != null && name.isNotEmpty) fileManagerFieldName = name;
-            await Logger.instance.log('UPLOAD: Found file manager field name: $fileManagerFieldName');
-          }
-        }
-        if (fileManagerFieldName == 'files_filemanager') {
-          // Fallback: search the entire doc for any hidden input ending in filemanager
-          final anyFm = editDoc.querySelector('input[type="hidden"][name\$="filemanager"]');
-          if (anyFm != null) {
-            final name = anyFm.attributes['name'];
-            if (name != null && name.isNotEmpty && name != 'itemid') fileManagerFieldName = name;
-            await Logger.instance.log('UPLOAD: Fallback file manager field name: $fileManagerFieldName');
-          }
-        }
-      }
-
-      bool hasSubmissionStatement = editResp.body.contains('name="submissionstatement"');
-      bool hasSubmitForGrading = editResp.body.contains('name="submitforgrading"');
+      // Extract ALL form fields from the edit submission form.
+      // This includes plugin-specific fields like assignsubmission_file_filemanager.
+      Map<String, String> formFields = {};
+      String? formActionUrl;
 
       String submitButtonValue = 'Save changes';
       final submitBtnEl = editDoc.querySelector('input[type="submit"][name="submitbutton"]');
@@ -1118,10 +1096,108 @@ class MoodleService {
         if (val != null && val.isNotEmpty) submitButtonValue = val;
       }
 
+      {
+        final form = editDoc.querySelector(
+          'form#mod_assign_submission_form, '
+          'form[action*="savesubmission"], '
+          'form[action*="view.php"]',
+        );
+        if (form != null) {
+          // Get form's action URL
+          final action = form.attributes['action'] ?? '';
+          if (action.isNotEmpty) {
+            formActionUrl = action.startsWith('http')
+                ? action
+                : '$_baseUrl${action.startsWith('/') ? '' : '/'}$action';
+          }
+          await Logger.instance.log('UPLOAD: Found form, action=$action');
+
+          // Extract all hidden inputs and relevant fields
+          final inputs = form.querySelectorAll('input, textarea, select');
+          for (final input in inputs) {
+            final tag = input.localName;
+            final type = input.attributes['type'] ?? '';
+            final name = input.attributes['name'];
+            if (name == null || name.isEmpty) continue;
+
+            if (tag == 'input') {
+              if (type == 'submit' || type == 'button') {
+                // Include submit button with its value
+                formFields[name] = input.attributes['value'] ?? submitButtonValue;
+              } else if (type == 'hidden') {
+                // Always include hidden fields
+                formFields[name] = input.attributes['value'] ?? '';
+              } else if (type == 'checkbox' || type == 'radio') {
+                // Include checkboxes/radios that are checked or are required form elements
+                if (input.attributes.containsKey('checked') ||
+                    name == 'submissionstatement' ||
+                    name == 'submitforgrading') {
+                  formFields[name] = input.attributes['value'] ?? '1';
+                }
+              } else {
+                // text, email, etc.
+                formFields[name] = input.attributes['value'] ?? '';
+              }
+            } else if (tag == 'textarea') {
+              // Skip textareas (they caused "rejected" errors in v1.0.4)
+              continue;
+            } else if (tag == 'select') {
+              final selectedOption = input.querySelector('option[selected]');
+              if (selectedOption != null) {
+                formFields[name] = selectedOption.attributes['value'] ?? '';
+              }
+            }
+          }
+        } else {
+          await Logger.instance.log('UPLOAD: WARNING - Could not find edit form in page');
+        }
+      }
+
+      // Override the file manager field value with our uploaded draft itemid
+      String? foundFmField;
+      for (final key in formFields.keys) {
+        if (key.endsWith('filemanager')) {
+          formFields[key] = finalItemid.toString();
+          foundFmField = key;
+          await Logger.instance.log('UPLOAD: Set $key = $finalItemid');
+        }
+      }
+
+      // Ensure sesskey and qf marker are present
+      if (!formFields.containsKey('sesskey')) {
+        formFields['sesskey'] = sesskey;
+      }
+      if (!formFields.containsKey('_qf__mod_assign_submission_form')) {
+        formFields['_qf__mod_assign_submission_form'] = '1';
+      }
+
+      // If no filemanager field found, try the known pattern
+      if (foundFmField == null) {
+        final anyFm = editDoc.querySelector('input[type="hidden"][name\$="filemanager"]');
+        if (anyFm != null) {
+          final name = anyFm.attributes['name'];
+          if (name != null && name.isNotEmpty && name != 'itemid') {
+            formFields[name] = finalItemid.toString();
+            await Logger.instance.log('UPLOAD: Fallback set $name = $finalItemid');
+          }
+        }
+      }
+
+      await Logger.instance.log('UPLOAD: Form fields: ${formFields.keys.join(', ')}');
+
+      // Determine the submission URL
+      final submitUrl = formActionUrl ??
+          '$_baseUrl/mod/assign/view.php?id=$cmid&action=savesubmission';
+
+      // Build headers with Referer for CSRF compatibility
+      Map<String, String> submitHeaders = _headers();
+      submitHeaders['Referer'] = editUrl;
+
       Future<String?> doSaveSubmission(Map<String, String> fields) async {
+        await Logger.instance.log('UPLOAD: POST savesubmission with fields: ${fields.keys.join(", ")}');
         final resp = await client.post(
-          Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid&action=savesubmission'),
-          headers: _headers(),
+          Uri.parse(submitUrl),
+          headers: submitHeaders,
           body: fields,
         ).timeout(_requestTimeout);
 
@@ -1132,45 +1208,51 @@ class MoodleService {
 
         if (body.contains('Your submission has been saved') ||
             body.contains('Su entrega ha sido guardada') ||
-            body.contains('class="notifysuccess"')) {
+            body.contains('Tu entrega ha sido guardada') ||
+            body.contains('Su env') ||
+            body.contains('Tu env') ||
+            body.contains('class="notifysuccess"') ||
+            body.contains('alert-success')) {
           return null;
-        }
-
-        if (body.contains('class="notifyproblem"') ||
-            body.contains('class="error"') ||
-            body.contains('role="alert"')) {
-          return 'Moodle rejected the submission. Please try in your browser.';
         }
 
         if (body.contains('action=editsubmission')) {
           return 'Submission form was rejected by Moodle. Please try in your browser.';
         }
 
+        if (body.contains('class="notifyproblem"') ||
+            body.contains('role="alert"') ||
+            body.contains('class="error"')) {
+          return 'Moodle rejected the submission. Please try in your browser.';
+        }
+
         return null;
       }
 
-      Map<String, String> baseFields() {
-        final f = <String, String>{
-          'sesskey': sesskey,
-          '_qf__mod_assign_submission_form': '1',
-          'submitbutton': submitButtonValue,
-        };
-        f[fileManagerFieldName] = finalItemid.toString();
-        return f;
+      // Try submission: first include submissionstatement if the form wants it
+      String? submitError;
+
+      // If the form HTML already contains submissionstatement field, include it from start
+      bool formHasSubmissionStatement = formFields.containsKey('submissionstatement');
+      bool formHasSubmitForGrading = formFields.containsKey('submitforgrading');
+      bool bodyHasSubmissionStatement = editResp.body.contains('name="submissionstatement"');
+      bool bodyHasSubmitForGrading = editResp.body.contains('name="submitforgrading"');
+
+      if (formHasSubmissionStatement || bodyHasSubmissionStatement) {
+        formFields['submissionstatement'] = '1';
+      }
+      if (formHasSubmitForGrading || bodyHasSubmitForGrading) {
+        formFields['submitforgrading'] = '1';
       }
 
-      String? submitError = await doSaveSubmission(baseFields());
+      submitError = await doSaveSubmission(formFields);
 
-      if (submitError != null && hasSubmissionStatement) {
-        await Logger.instance.log('UPLOAD: Retrying savesubmission with submissionstatement');
-        submitError = await doSaveSubmission(baseFields()..['submissionstatement'] = '1');
-      }
-
-      if (submitError != null && hasSubmitForGrading) {
-        await Logger.instance.log('UPLOAD: Retrying savesubmission with submitforgrading');
-        submitError = await doSaveSubmission(baseFields()
-          ..['submissionstatement'] = '1'
-          ..['submitforgrading'] = '1');
+      // Second attempt: if failed, try without submissionstatement (edge case)
+      if (submitError != null && formFields.containsKey('submissionstatement')) {
+        await Logger.instance.log('UPLOAD: Retrying without submissionstatement');
+        final retryFields = Map<String, String>.from(formFields);
+        retryFields.remove('submissionstatement');
+        submitError = await doSaveSubmission(retryFields);
       }
 
       if (submitError != null) {
@@ -1351,7 +1433,7 @@ class MoodleService {
         return {'success': false, 'message': 'Invalid task URL.'};
       }
 
-      // Step 1: Get the assignment page to find sesskey and the actual Remove link
+      // Step 1: Get the assignment page to find sesskey and removal elements
       final assignResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
       final assignDoc = html_parser.parse(assignResp.body);
       final sesskey = _extractSesskey(assignResp.body);
@@ -1359,85 +1441,122 @@ class MoodleService {
         return {'success': false, 'message': 'Could not find session key.'};
       }
 
-      // Step 2: Find the "Remove submission" link on the assignment page
-      String? removeUrl;
+      // Step 2: Find the "Remove submission" link/button/form on the assignment page
+      String? removeLinkUrl;
+      bool remoteSuccess = false;
+
+      // Strategy A: Find any element (a, button, input) linking to removesubmission
       {
-        final removeLinks = assignDoc.querySelectorAll(
-          'a[href*="removesubmission"], a[href*="remove_submission"], a[href*="delete_submission"]',
-        );
-        for (final link in removeLinks) {
-          final text = link.text.trim().toLowerCase();
-          if (text.contains('remove') || text.contains('eliminar') || text.contains('delete')) {
-            removeUrl = link.attributes['href'];
-            if (removeUrl != null) break;
+        // Look for any element with an href or action pointing to removesubmission
+        for (final el in assignDoc.querySelectorAll('a[href*="removesubmission"], a[href*="remove_submission"], form[action*="removesubmission"]')) {
+          final href = el.attributes['href'] ?? el.attributes['action'] ?? '';
+          if (href.contains('removesubmission')) {
+            removeLinkUrl = href;
+            break;
           }
         }
-        // Fallback: look for any element with removesubmission
-        if (removeUrl == null) {
-          final anyLink = assignDoc.querySelector('[href*="removesubmission"]');
-          if (anyLink != null) removeUrl = anyLink.attributes['href'];
+        if (removeLinkUrl == null) {
+          // Try finding by text content
+          for (final el in assignDoc.querySelectorAll('a, button, input[type="submit"], input[type="button"], span[role="button"]')) {
+            final text = el.text.trim().toLowerCase();
+            final type = (el.attributes['type'] ?? '').toLowerCase();
+            final name = (el.attributes['name'] ?? '').toLowerCase();
+            if (text.contains('remove') || text.contains('eliminar') || text.contains('delete') ||
+                name.contains('remove') || name.contains('eliminar') || name.contains('delete')) {
+              final href = el.attributes['href'] ?? el.attributes['formaction'] ?? '';
+              if (href.contains('removesubmission')) {
+                removeLinkUrl = href;
+                break;
+              }
+              // If it's an input button, look for a surrounding form
+              if (type == 'submit' || type == 'button') {
+                // Walk up to find the form
+                var parent = el.parent;
+                while (parent != null) {
+                  if (parent.localName == 'form') {
+                    final action = parent.attributes['action'] ?? '';
+                    if (action.contains('removesubmission')) {
+                      removeLinkUrl = action;
+                      break;
+                    }
+                  }
+                  parent = parent.parent;
+                }
+                if (removeLinkUrl != null) break;
+              }
+            }
+          }
         }
       }
 
-      await Logger.instance.log('REMOVE_SUB: Found remove link: $removeUrl');
+      await Logger.instance.log('REMOVE_SUB: Found removal link: $removeLinkUrl');
 
-      // Step 3: Follow the remove submission link (or construct as fallback)
-      bool remoteSuccess = false;
-
-      if (removeUrl != null && removeUrl.isNotEmpty) {
-        // Follow the actual link from the page — this goes to the confirmation page
+      // Strategy B: Follow the found link to get the confirmation page
+      if (removeLinkUrl != null && removeLinkUrl.isNotEmpty && !remoteSuccess) {
         try {
-          final resolvedUrl = removeUrl.startsWith('http')
-              ? removeUrl
-              : '$_baseUrl${removeUrl.startsWith('/') ? '' : '/'}$removeUrl';
-          await Logger.instance.log('REMOVE_SUB: Following remove link: $resolvedUrl');
+          final resolvedUrl = removeLinkUrl.startsWith('http')
+              ? removeLinkUrl
+              : '$_baseUrl${removeLinkUrl.startsWith('/') ? '' : '/'}$removeLinkUrl';
+          await Logger.instance.log('REMOVE_SUB: Following: $resolvedUrl');
           final confirmResp = await _get(client, resolvedUrl);
           final confirmBody = confirmResp.body;
 
-          // Check if we got a confirmation form to submit
-          final confirmDoc = html_parser.parse(confirmBody);
-          final form = confirmDoc.querySelector('form[action*="view.php"], form[method="post"]');
+          // Check if the removal succeeded directly (no confirmation needed)
+          if (confirmBody.contains('Your submission has been removed') ||
+              confirmBody.contains('Su entrega ha sido eliminada') ||
+              confirmBody.contains('Tu entrega ha sido eliminada') ||
+              confirmBody.contains('class="notifysuccess"') ||
+              confirmBody.contains('alert-success')) {
+            remoteSuccess = true;
+          }
 
-          if (form != null) {
-            // Submit the confirmation form with its hidden fields + confirm=1
-            final formAction = form.attributes['action'] ?? '';
-            final actionUrl = formAction.startsWith('http')
-                ? formAction
-                : '$_baseUrl${formAction.startsWith('/') ? '' : '/'}$formAction';
-            final formData = <String, String>{};
-            for (final input in form.querySelectorAll('input[type="hidden"], input[type="submit"]')) {
-              final name = input.attributes['name'];
-              final val = input.attributes['value'] ?? '';
-              if (name != null && name.isNotEmpty) formData[name] = val;
+          // Check for a confirmation form
+          if (!remoteSuccess) {
+            final confirmDoc = html_parser.parse(confirmBody);
+            // Look for any "Yes" / "Confirm" form or button
+            final confirmForm = confirmDoc.querySelector(
+              'form[action*="removesubmission"], '
+              'form[action*="view.php"]',
+            );
+            if (confirmForm != null) {
+              final formAction = confirmForm.attributes['action'] ?? '';
+              final actionUrl = formAction.startsWith('http')
+                  ? formAction
+                  : '$_baseUrl${formAction.startsWith('/') ? '' : '/'}$formAction';
+              final formData = <String, String>{
+                'id': cmid,
+                'action': 'removesubmission',
+                'sesskey': sesskey,
+                'confirm': '1',
+              };
+              // Extract any extra hidden fields from the confirmation form
+              for (final input in confirmForm.querySelectorAll('input[type="hidden"]')) {
+                final name = input.attributes['name'];
+                final val = input.attributes['value'] ?? '';
+                if (name != null && name.isNotEmpty) formData[name] = val;
+              }
+              await Logger.instance.log('REMOVE_SUB: Submitting confirmation: $actionUrl');
+              final postResp = await client.post(
+                Uri.parse(actionUrl),
+                headers: {..._headers(), 'Referer': resolvedUrl},
+                body: formData,
+              ).timeout(_requestTimeout);
+              final postBody = postResp.body;
+              remoteSuccess = postBody.contains('Your submission has been removed') ||
+                  postBody.contains('Su entrega ha sido eliminada') ||
+                  postBody.contains('Tu entrega ha sido eliminada') ||
+                  postBody.contains('class="notifysuccess"') ||
+                  postBody.contains('alert-success');
             }
-            formData['confirm'] = '1';
-            formData['sesskey'] = sesskey;
-
-            await Logger.instance.log('REMOVE_SUB: Submitting confirmation form: $actionUrl');
-            final submitResp = await client.post(
-              Uri.parse(actionUrl),
-              headers: _headers(),
-              body: formData,
-            ).timeout(_requestTimeout);
-
-            final submitBody = submitResp.body;
-            remoteSuccess = submitBody.contains('Your submission has been removed') ||
-                submitBody.contains('Su entrega ha sido eliminada') ||
-                submitBody.contains('class="notifysuccess"');
-          } else {
-            // No confirmation form — check if removal already happened
-            remoteSuccess = confirmBody.contains('Your submission has been removed') ||
-                confirmBody.contains('Su entrega ha sido eliminada') ||
-                confirmBody.contains('class="notifysuccess"');
           }
         } catch (e) {
           await Logger.instance.log('REMOVE_SUB: Follow link failed: $e');
         }
       }
 
-      // Fallback A: Direct GET with confirm=1
+      // Strategy C: Direct GET with confirm=1 (standard Moodle removal)
       if (!remoteSuccess) {
-        await Logger.instance.log('REMOVE_SUB: Trying direct GET removesubmission');
+        await Logger.instance.log('REMOVE_SUB: Direct GET removesubmission');
         try {
           final getResp = await _get(client,
             '$_baseUrl/mod/assign/view.php?id=$cmid&action=removesubmission&sesskey=$sesskey&confirm=1',
@@ -1445,19 +1564,21 @@ class MoodleService {
           final body = getResp.body;
           remoteSuccess = body.contains('Your submission has been removed') ||
               body.contains('Su entrega ha sido eliminada') ||
-              body.contains('class="notifysuccess"');
+              body.contains('Tu entrega ha sido eliminada') ||
+              body.contains('class="notifysuccess"') ||
+              body.contains('alert-success');
         } catch (e) {
           await Logger.instance.log('REMOVE_SUB: Direct GET failed: $e');
         }
       }
 
-      // Fallback B: Direct POST with confirm=1
+      // Strategy D: Direct POST with confirm=1
       if (!remoteSuccess) {
-        await Logger.instance.log('REMOVE_SUB: Trying direct POST removesubmission');
+        await Logger.instance.log('REMOVE_SUB: Direct POST removesubmission');
         try {
           final postResp = await client.post(
             Uri.parse('$_baseUrl/mod/assign/view.php'),
-            headers: _headers(),
+            headers: {..._headers(), 'Referer': '$_baseUrl/mod/assign/view.php?id=$cmid'},
             body: {
               'id': cmid,
               'action': 'removesubmission',
@@ -1465,17 +1586,63 @@ class MoodleService {
               'confirm': '1',
             },
           ).timeout(_requestTimeout);
-
           final body = postResp.body;
           remoteSuccess = body.contains('Your submission has been removed') ||
               body.contains('Su entrega ha sido eliminada') ||
-              body.contains('class="notifysuccess"');
+              body.contains('Tu entrega ha sido eliminada') ||
+              body.contains('class="notifysuccess"') ||
+              body.contains('alert-success');
         } catch (e) {
           await Logger.instance.log('REMOVE_SUB: Direct POST failed: $e');
         }
       }
 
-      // Step 4: Clear local DB if remote removal succeeded
+      // Strategy E: Re-fetch assignment page to verify submission is gone
+      if (!remoteSuccess) {
+        await Logger.instance.log('REMOVE_SUB: Verifying by re-fetching assignment page');
+        try {
+          await Future.delayed(const Duration(milliseconds: 500));
+          final verifyResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
+          final verifyBody = verifyResp.body;
+
+          // If there's a success notification on the page, submission was removed
+          if (verifyBody.contains('Your submission has been removed') ||
+              verifyBody.contains('Su entrega ha sido eliminada') ||
+              verifyBody.contains('Tu entrega ha sido eliminada') ||
+              verifyBody.contains('class="notifysuccess"') ||
+              verifyBody.contains('alert-success')) {
+            remoteSuccess = true;
+          } else {
+            // Check if there's no longer a submitted file on the page
+            // Look for the "Add submission" button (means submission was cleared)
+            final verifyDoc = html_parser.parse(verifyBody);
+            final addSubmissionLinks = verifyDoc.querySelectorAll(
+              'a[href*="editsubmission"], a[href*="addsubmission"]',
+            );
+            bool canAddSubmission = false;
+            for (final link in addSubmissionLinks) {
+              final text = link.text.trim().toLowerCase();
+              if (text.contains('add') || text.contains('edit') || text.contains('agregar') || text.contains('editar') || text.contains('añadir')) {
+                canAddSubmission = true;
+                break;
+              }
+            }
+            // Also check files from submission area
+            final fileLinks = verifyDoc.querySelectorAll(
+              '[data-region="submission-content"] a[href*="pluginfile.php"], '
+              '[data-region="submission-received"] a[href*="pluginfile.php"]',
+            );
+            if (canAddSubmission && fileLinks.isEmpty) {
+              remoteSuccess = true;
+              await Logger.instance.log('REMOVE_SUB: Verified - no files found and add link present');
+            }
+          }
+        } catch (e) {
+          await Logger.instance.log('REMOVE_SUB: Verification fetch failed: $e');
+        }
+      }
+
+      // Step 5: Clear local DB if remote removal succeeded
       if (remoteSuccess) {
         final db = await DatabaseService.instance.database;
         List<Map<String, dynamic>> existing;
