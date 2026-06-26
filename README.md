@@ -138,7 +138,7 @@ Moodle is great for teachers, but **students get lost** — assignments spread a
 |---|---|---|
 | 🎯 Flutter SDK | 3.0+ | [Install Flutter](https://docs.flutter.dev/get-started/install) |
 | 🐍 Python | 3.10+ | [Download Python](https://www.python.org/downloads/) |
-| 🎓 Moodle account | — | Your school's Moodle instance (e.g., ITLA Virtual) |
+| 🎓 Moodle account | — | Your school's Moodle instance |
 
 ### 💾 Installation
 
