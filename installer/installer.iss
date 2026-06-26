@@ -2,7 +2,7 @@
 ; This script creates a professional Windows installer
 
 #define MyAppName "Homework Tracker"
-#define MyAppVersion "1.0.5"
+#define MyAppVersion "1.0.6"
 #define MyAppPublisher "Homework Tracker"
 #define MyAppURL "https://github.com/oswaldhz/homework-tracker"
 #define MyAppExeName "homework_tracker.exe"
