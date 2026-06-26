@@ -24,12 +24,15 @@ class MoodleService {
 
   Map<String, String> _headers() {
     final h = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept':
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
       'Accept-Language': 'es-DO,es;q=0.9,en;q=0.8',
     };
     if (_cookies.isNotEmpty) {
-      h['Cookie'] = _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
+      h['Cookie'] =
+          _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
     }
     return h;
   }
@@ -115,16 +118,26 @@ class MoodleService {
 
   bool _isCookieAttributeName(String name) {
     final lower = name.toLowerCase();
-    return const {'expires', 'max-age', 'domain', 'path', 'secure', 'httponly', 'samesite', 'partitioned'}
-        .contains(lower);
+    return const {
+      'expires',
+      'max-age',
+      'domain',
+      'path',
+      'secure',
+      'httponly',
+      'samesite',
+      'partitioned'
+    }.contains(lower);
   }
 
-  Future<http.Response> _get(http.Client client, String url, {Map<String, String>? extraHeaders, int retries = _maxRetries}) async {
+  Future<http.Response> _get(http.Client client, String url,
+      {Map<String, String>? extraHeaders, int retries = _maxRetries}) async {
     for (var attempt = 0; attempt <= retries; attempt++) {
       try {
-        final response = await client
-            .get(Uri.parse(url), headers: {..._headers(), ...?extraHeaders})
-            .timeout(_requestTimeout);
+        final response = await client.get(Uri.parse(url), headers: {
+          ..._headers(),
+          ...?extraHeaders
+        }).timeout(_requestTimeout);
         _parseCookies(response);
         return response;
       } on SocketException catch (_) {
@@ -170,7 +183,9 @@ class MoodleService {
 
       // Also check link text for Office 365 / Microsoft mentions
       final allLinks = doc.querySelectorAll('a');
-      final ssoKeywords = RegExp(r'office\s*365|microsoft|sso|iniciar sesión con', caseSensitive: false);
+      final ssoKeywords = RegExp(
+          r'office\s*365|microsoft|sso|iniciar sesión con',
+          caseSensitive: false);
       for (final link in allLinks) {
         final text = link.text.trim();
         final href = link.attributes['href'] ?? '';
@@ -188,14 +203,14 @@ class MoodleService {
     }
   }
 
-
-
-  Future<void> _login(String moodleUrl, String username, String password) async {
+  Future<void> _login(
+      String moodleUrl, String username, String password) async {
     const maxAttempts = 3;
     Exception? lastError;
 
     await Logger.instance.clear();
-    await Logger.instance.log('LOGIN: starting for $moodleUrl (user=$username)');
+    await Logger.instance
+        .log('LOGIN: starting for $moodleUrl (user=$username)');
 
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       final client = _createClient();
@@ -204,9 +219,14 @@ class MoodleService {
         return;
       } on Exception catch (e) {
         lastError = e;
-        final errorText = e.toString().toLowerCase()
-            .replaceAll('ó', 'o').replaceAll('í', 'i')
-            .replaceAll('á', 'a').replaceAll('é', 'e').replaceAll('ú', 'u');
+        final errorText = e
+            .toString()
+            .toLowerCase()
+            .replaceAll('ó', 'o')
+            .replaceAll('í', 'i')
+            .replaceAll('á', 'a')
+            .replaceAll('é', 'e')
+            .replaceAll('ú', 'u');
         final isSessionError = errorText.contains('sesion') ||
             errorText.contains('session') ||
             errorText.contains('time');
@@ -228,14 +248,22 @@ class MoodleService {
     throw lastError ?? Exception('Login failed after $maxAttempts attempts');
   }
 
-  Future<void> _attemptLogin(http.Client client, String moodleUrl, String username, String password) async {
+  Future<void> _attemptLogin(http.Client client, String moodleUrl,
+      String username, String password) async {
     _cookies.clear();
     _baseUrl = moodleUrl.replaceAll(RegExp(r'/$'), '');
 
     final loginUrl = '$_baseUrl/login/index.php';
     final httpClient = HttpClient();
 
-    Future<({int status, Uri url, String body, Map<String, String> cookies, String? location})> doRequest(String method, Uri url, {String? bodyString}) async {
+    Future<
+        ({
+          int status,
+          Uri url,
+          String body,
+          Map<String, String> cookies,
+          String? location
+        })> doRequest(String method, Uri url, {String? bodyString}) async {
       final req = method == 'POST'
           ? await httpClient.postUrl(url)
           : await httpClient.openUrl(method, url);
@@ -254,13 +282,21 @@ class MoodleService {
       final body = await _readHttpClientResponse(resp);
       final cookies = _extractCookiesFromHeaders(resp.headers);
       final location = _getLocation(resp.headers);
-      return (status: resp.statusCode, url: url, body: body, cookies: cookies, location: location);
+      return (
+        status: resp.statusCode,
+        url: url,
+        body: body,
+        cookies: cookies,
+        location: location
+      );
     }
 
     try {
       await Logger.instance.log('LOGIN: GET $loginUrl');
       final getResp = await doRequest('GET', Uri.parse(loginUrl));
-      for (final e in getResp.cookies.entries) _cookies[e.key] = e.value;
+      for (final e in getResp.cookies.entries) {
+        _cookies[e.key] = e.value;
+      }
       await Logger.instance.log(
         'LOGIN: GET status=${getResp.status}, url=${getResp.url}, '
         'cookies=[${_cookies.keys.join(', ')}], bodyLength=${getResp.body.length}',
@@ -269,7 +305,8 @@ class MoodleService {
       final doc = html_parser.parse(getResp.body);
       final tokenInput = doc.querySelector('input[name="logintoken"]');
       final logintoken = tokenInput?.attributes['value'] ?? '';
-      await Logger.instance.log('LOGIN: token found=${logintoken.isNotEmpty}, tokenLength=${logintoken.length}');
+      await Logger.instance.log(
+          'LOGIN: token found=${logintoken.isNotEmpty}, tokenLength=${logintoken.length}');
 
       if (logintoken.isEmpty) {
         throw Exception('Could not find login form. Check the Moodle URL.');
@@ -281,9 +318,11 @@ class MoodleService {
           '&anchor=';
       await Logger.instance.log('LOGIN: POST $loginUrl (username=$username)');
       await Logger.instance.log('LOGIN: POST encodedBody=$bodyString');
-      await Logger.instance.log('LOGIN: POST cookieHeader=${_cookies.entries.map((e) => '${e.key}=${e.value}').join('; ')}');
+      await Logger.instance.log(
+          'LOGIN: POST cookieHeader=${_cookies.entries.map((e) => '${e.key}=${e.value}').join('; ')}');
 
-      var current = await doRequest('POST', Uri.parse(loginUrl), bodyString: bodyString);
+      var current =
+          await doRequest('POST', Uri.parse(loginUrl), bodyString: bodyString);
       await Logger.instance.log(
         'LOGIN: POST status=${current.status}, url=${current.url}, '
         'setCookies=[${current.cookies.keys.join(', ')}], bodyLength=${current.body.length}',
@@ -291,14 +330,19 @@ class MoodleService {
 
       // Follow redirects manually so cookies are always attached.
       var redirectCount = 0;
-      while ((current.status == 301 || current.status == 302 || current.status == 303) &&
-             current.location != null &&
-             redirectCount < 5) {
+      while ((current.status == 301 ||
+              current.status == 302 ||
+              current.status == 303) &&
+          current.location != null &&
+          redirectCount < 5) {
         // Update cookies from the redirect response before following.
-        for (final e in current.cookies.entries) _cookies[e.key] = e.value;
+        for (final e in current.cookies.entries) {
+          _cookies[e.key] = e.value;
+        }
 
         final nextUrl = current.url.resolve(current.location!);
-        await Logger.instance.log('LOGIN: redirect ${redirectCount + 1} -> $nextUrl, cookies=[${_cookies.keys.join(', ')}]');
+        await Logger.instance.log(
+            'LOGIN: redirect ${redirectCount + 1} -> $nextUrl, cookies=[${_cookies.keys.join(', ')}]');
 
         current = await doRequest('GET', nextUrl);
         await Logger.instance.log(
@@ -309,13 +353,19 @@ class MoodleService {
       }
 
       if (!current.url.toString().contains('/login/')) {
-        await Logger.instance.log('LOGIN: success via redirect to ${current.url}');
+        await Logger.instance
+            .log('LOGIN: success via redirect to ${current.url}');
         return;
       }
 
       // Check for visible error messages on the final login page
       final errorDoc = html_parser.parse(current.body);
-      for (final sel in ['.loginerrormsg', '#loginerrormessage', '.alert.alert-danger', '.alert']) {
+      for (final sel in [
+        '.loginerrormsg',
+        '#loginerrormessage',
+        '.alert.alert-danger',
+        '.alert'
+      ]) {
         final errorEl = errorDoc.querySelector(sel);
         if (errorEl == null) continue;
         final text = errorEl.text.trim();
@@ -325,8 +375,10 @@ class MoodleService {
         }
       }
 
-      await Logger.instance.log('LOGIN: failed without visible error, bodyLength=${current.body.length}');
-      await Logger.instance.log('LOGIN: response body snippet=${current.body.substring(0, current.body.length.clamp(0, 1000))}');
+      await Logger.instance.log(
+          'LOGIN: failed without visible error, bodyLength=${current.body.length}');
+      await Logger.instance.log(
+          'LOGIN: response body snippet=${current.body.substring(0, current.body.length.clamp(0, 1000))}');
       throw Exception('Login failed. Check your credentials.');
     } finally {
       httpClient.close();
@@ -350,8 +402,10 @@ class MoodleService {
   }
 
   void _applyLoginHeaders(HttpHeaders headers) {
-    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
-    headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8');
+    headers.set('User-Agent',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+    headers.set('Accept',
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8');
     headers.set('Accept-Encoding', 'gzip, deflate, br');
     headers.set('Connection', 'keep-alive');
   }
@@ -386,7 +440,8 @@ class MoodleService {
 
   /// Validates that a session cookie obtained from an external login (e.g.
   /// Office 365 SSO) is accepted by Moodle. Throws if invalid.
-  Future<void> _loginWithSessionCookie(http.Client client, String moodleUrl, String sessionCookie) async {
+  Future<void> _loginWithSessionCookie(
+      http.Client client, String moodleUrl, String sessionCookie) async {
     _cookies.clear();
     _baseUrl = moodleUrl.replaceAll(RegExp(r'/$'), '');
 
@@ -412,7 +467,8 @@ class MoodleService {
 
     // If we got redirected back to login, the cookie is invalid
     if (url.contains('/login/')) {
-      throw Exception('The session cookie is invalid or has expired. Please log in again.');
+      throw Exception(
+          'The session cookie is invalid or has expired. Please log in again.');
     }
 
     // Make sure we captured any rotated session cookie from the response
@@ -432,13 +488,15 @@ class MoodleService {
 
   void _saveDebugResponse(String body, String label) {
     try {
-      final path = '${Directory.systemTemp.path}/homework_tracker_${label}_${DateTime.now().millisecondsSinceEpoch}.html';
+      final path =
+          '${Directory.systemTemp.path}/homework_tracker_${label}_${DateTime.now().millisecondsSinceEpoch}.html';
       File(path).writeAsStringSync(body);
       Logger.instance.log('DEBUG: Saved $label response to $path');
     } catch (_) {}
   }
 
-  Future<void> _checkCourseSubmissionStatus(http.Client client, Map<String, dynamic> course) async {
+  Future<void> _checkCourseSubmissionStatus(
+      http.Client client, Map<String, dynamic> course) async {
     try {
       final courseUrl = course['url']?.toString() ?? '';
       if (courseUrl.isEmpty) return;
@@ -450,7 +508,8 @@ class MoodleService {
       final modules = doc.querySelectorAll('.activity');
       for (final module in modules) {
         // Check if this is an assignment or quiz
-        final link = module.querySelector('a[href*="/mod/assign/"], a[href*="/mod/quiz/"]');
+        final link = module
+            .querySelector('a[href*="/mod/assign/"], a[href*="/mod/quiz/"]');
         if (link == null) continue;
         final activityUrl = link.attributes['href'] ?? '';
         if (activityUrl.isEmpty) continue;
@@ -470,22 +529,25 @@ class MoodleService {
         final statusText = statusEl?.text.trim().toLowerCase() ?? '';
 
         final hasSubmitted = statusText.contains('submitted') ||
-                             statusText.contains('entregado') ||
-                             statusText.contains('graded') ||
-                             statusText.contains('calificado') ||
-                             statusText.contains('for grading');
+            statusText.contains('entregado') ||
+            statusText.contains('graded') ||
+            statusText.contains('calificado') ||
+            statusText.contains('for grading');
 
         if (hasSubmitted) {
           final db = await DatabaseService.instance.database;
-          final existing = await db.query('tasks', where: 'url = ?', whereArgs: [activityUrl]);
+          final existing = await db
+              .query('tasks', where: 'url = ?', whereArgs: [activityUrl]);
           if (existing.isNotEmpty) {
-            await db.update('tasks',
+            await db.update(
+              'tasks',
               {
                 'is_submitted': 1,
                 'file_uploaded': 1,
                 'submission_status': statusEl!.text.trim(),
               },
-              where: 'url = ?', whereArgs: [activityUrl],
+              where: 'url = ?',
+              whereArgs: [activityUrl],
             );
           }
         }
@@ -505,7 +567,8 @@ class MoodleService {
         try {
           await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
         } catch (_) {
-          await Logger.instance.log('SCRAPE: Saved session expired, logging in fresh');
+          await Logger.instance
+              .log('SCRAPE: Saved session expired, logging in fresh');
           _cookies.clear();
           await _login(moodleUrl, username, password);
         }
@@ -519,42 +582,54 @@ class MoodleService {
       final doc = html_parser.parse(resp.body);
       var eventElements = doc.querySelectorAll('[data-type="event"]');
       if (eventElements.isEmpty) {
-        eventElements = doc.querySelectorAll('.event, .calendar_event, .event-card');
+        eventElements =
+            doc.querySelectorAll('.event, .calendar_event, .event-card');
       }
 
       final assignments = <Map<String, dynamic>>[];
       for (final event in eventElements) {
         try {
-          final title = event.querySelector('.event-name a, h3.name, .card-header a, .event-title a')?.text.trim() ?? '';
+          final title = event
+                  .querySelector(
+                      '.event-name a, h3.name, .card-header a, .event-title a')
+                  ?.text
+                  .trim() ??
+              '';
           if (title.isEmpty) continue;
 
           DateTime? dueDate;
           final tsEl = event.querySelector('[data-timestamp]');
           if (tsEl != null) {
             final ts = int.tryParse(tsEl.attributes['data-timestamp'] ?? '');
-            if (ts != null) dueDate = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+            if (ts != null)
+              dueDate = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
           }
           if (dueDate == null) {
             final dateEl = event.querySelector('.date, .event-date, .time');
             if (dateEl != null) {
               final dateText = dateEl.text.trim();
-              final ts = int.tryParse(dateText.replaceAll(RegExp(r'[^0-9]'), ''));
+              final ts =
+                  int.tryParse(dateText.replaceAll(RegExp(r'[^0-9]'), ''));
               if (ts != null && ts > 1000000000) {
                 dueDate = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
               }
             }
           }
 
-          final courseEl = event.querySelector('a[href*="/course/view.php"], .course a, .event-course a');
+          final courseEl = event.querySelector(
+              'a[href*="/course/view.php"], .course a, .event-course a');
           final courseName = courseEl?.text.trim() ?? 'Unknown Course';
           final courseUrl = courseEl?.attributes['href'] ?? '';
 
-          final urlEl = event.querySelector('a[href*="/mod/"], a.card-link, .card-footer a');
+          final urlEl = event
+              .querySelector('a[href*="/mod/"], a.card-link, .card-footer a');
           final url = urlEl?.attributes['href'] ?? '';
 
-          final descEl = event.querySelector('.description-content, .description, .event-description');
+          final descEl = event.querySelector(
+              '.description-content, .description, .event-description');
           final descText = descEl?.text.trim() ?? '';
-          final description = descText.length > 500 ? descText.substring(0, 500) : descText;
+          final description =
+              descText.length > 500 ? descText.substring(0, 500) : descText;
 
           assignments.add({
             'title': title,
@@ -594,13 +669,15 @@ class MoodleService {
   }) async {
     final client = _createClient();
     try {
-      await Logger.instance.log('TOGGLE: Starting toggleCompletion for $taskUrl, complete=$complete');
+      await Logger.instance.log(
+          'TOGGLE: Starting toggleCompletion for $taskUrl, complete=$complete');
 
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
         try {
           await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
         } catch (_) {
-          await Logger.instance.log('TOGGLE: Saved session expired, logging in fresh');
+          await Logger.instance
+              .log('TOGGLE: Saved session expired, logging in fresh');
           _cookies.clear();
           await _login(moodleUrl, username, password);
         }
@@ -614,7 +691,10 @@ class MoodleService {
       final sesskey = _extractSesskey(taskPageResp.body);
       if (sesskey == null) {
         await Logger.instance.log('TOGGLE: Could not find sesskey');
-        return {'success': false, 'message': 'Could not find session key. Please try again.'};
+        return {
+          'success': false,
+          'message': 'Could not find session key. Please try again.'
+        };
       }
       await Logger.instance.log('TOGGLE: Found sesskey: $sesskey');
 
@@ -629,58 +709,74 @@ class MoodleService {
       Exception? lastError;
       for (int attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          await Logger.instance.log('TOGGLE: Attempt $attempt: Sending toggle request');
-          
+          await Logger.instance
+              .log('TOGGLE: Attempt $attempt: Sending toggle request');
+
           // Moodle togglecompletion.php needs a proper GET request with sesskey
           // It returns a redirect back to the course page or the activity page
-          final toggleUrl = '$_baseUrl/course/togglecompletion.php?id=$cmid&sesskey=$sesskey';
+          final toggleUrl =
+              '$_baseUrl/course/togglecompletion.php?id=$cmid&sesskey=$sesskey';
           await Logger.instance.log('TOGGLE: URL: $toggleUrl');
-          
+
           try {
             final toggleResp = await _get(client, toggleUrl);
-            await Logger.instance.log('TOGGLE: Response status: ${toggleResp.statusCode}');
-            await Logger.instance.log('TOGGLE: Response URL: ${toggleResp.request?.url}');
+            await Logger.instance
+                .log('TOGGLE: Response status: ${toggleResp.statusCode}');
+            await Logger.instance
+                .log('TOGGLE: Response URL: ${toggleResp.request?.url}');
           } catch (e) {
-            await Logger.instance.log('TOGGLE: Toggle request exception (expected redirect): $e');
+            await Logger.instance.log(
+                'TOGGLE: Toggle request exception (expected redirect): $e');
           }
 
           // Wait for Moodle to process
           await Future.delayed(const Duration(milliseconds: 1000));
-          
+
           // Verify the toggle worked by checking the page:
           // - Check for completion checkbox/toggle state
           // - Check for completion status text
           // - Check the URL to see if we ended up on the course page (success indicator)
           final verifyResp = await _get(client, taskUrl);
           final verifyDoc = html_parser.parse(verifyResp.body);
-          
+
           bool verified = false;
-          
+
           // Method 1: Check for manual completion checkbox state
-          final completionCheckbox = verifyDoc.querySelector('input[type="checkbox"][name="completion"]');
+          final completionCheckbox = verifyDoc
+              .querySelector('input[type="checkbox"][name="completion"]');
           if (completionCheckbox != null) {
             final isChecked = completionCheckbox.attributes['checked'] != null;
             if (complete == isChecked) {
               verified = true;
-              await Logger.instance.log('TOGGLE: Verified via checkbox, checked=$isChecked');
+              await Logger.instance
+                  .log('TOGGLE: Verified via checkbox, checked=$isChecked');
             }
           }
-          
+
           // Method 2: Check completion icon/indicator class
           if (!verified) {
             final completionEls = verifyDoc.querySelectorAll(
-              '.completion_checkbox, .completion_complete, .completion_incomplete, '
-              '[class*="completion"], .activity-completion, .completion-icon'
-            );
+                '.completion_checkbox, .completion_complete, .completion_incomplete, '
+                '[class*="completion"], .activity-completion, .completion-icon');
             for (final el in completionEls) {
-              final classes = (el.attributes['class'] ?? '') + ' ' + (el.text.trim().toLowerCase());
-              if (complete && (classes.contains('completion_complete') || classes.contains('complete') || classes.contains('checked') || classes.contains('check'))) {
+              final classes =
+                  '${el.attributes['class'] ?? ''} ${el.text.trim().toLowerCase()}';
+              if (complete &&
+                  (classes.contains('completion_complete') ||
+                      classes.contains('complete') ||
+                      classes.contains('checked') ||
+                      classes.contains('check'))) {
                 verified = true;
-                await Logger.instance.log('TOGGLE: Verified via completion class: ${el.attributes['class']}');
+                await Logger.instance.log(
+                    'TOGGLE: Verified via completion class: ${el.attributes['class']}');
                 break;
-              } else if (!complete && (classes.contains('completion_incomplete') || classes.contains('incomplete') || classes.isEmpty)) {
+              } else if (!complete &&
+                  (classes.contains('completion_incomplete') ||
+                      classes.contains('incomplete') ||
+                      classes.isEmpty)) {
                 verified = true;
-                await Logger.instance.log('TOGGLE: Verified via incomplete class: ${el.attributes['class']}');
+                await Logger.instance.log(
+                    'TOGGLE: Verified via incomplete class: ${el.attributes['class']}');
                 break;
               }
             }
@@ -688,38 +784,48 @@ class MoodleService {
 
           // Method 3: Check if we have a form with completion tracking
           if (!verified) {
-            final manualCompletion = verifyDoc.querySelector('.manual-completion-button, [data-toggle="manual-completion"]');
+            final manualCompletion = verifyDoc.querySelector(
+                '.manual-completion-button, [data-toggle="manual-completion"]');
             if (manualCompletion != null && !complete) {
               verified = true;
-              await Logger.instance.log('TOGGLE: Verified via manual-completion-button available');
+              await Logger.instance.log(
+                  'TOGGLE: Verified via manual-completion-button available');
             }
           }
 
           // Method 4: In some Moodle themes, completion is shown via image/icon
           if (!verified) {
-            final completionIcons = verifyDoc.querySelectorAll('img[alt*="complete" i], img[alt*="incomplete" i], .completion-icon img');
+            final completionIcons = verifyDoc.querySelectorAll(
+                'img[alt*="complete" i], img[alt*="incomplete" i], .completion-icon img');
             for (final icon in completionIcons) {
               final alt = (icon.attributes['alt'] ?? '').toLowerCase();
               final src = (icon.attributes['src'] ?? '').toLowerCase();
               final combined = '$alt $src';
-              if (complete && (combined.contains('complete') || combined.contains('check'))) {
+              if (complete &&
+                  (combined.contains('complete') ||
+                      combined.contains('check'))) {
                 verified = true;
-                await Logger.instance.log('TOGGLE: Verified via completion icon alt/src');
+                await Logger.instance
+                    .log('TOGGLE: Verified via completion icon alt/src');
                 break;
               } else if (!complete && combined.contains('incomplete')) {
                 verified = true;
-                await Logger.instance.log('TOGGLE: Verified via incomplete icon');
+                await Logger.instance
+                    .log('TOGGLE: Verified via incomplete icon');
                 break;
               }
             }
           }
 
-          await Logger.instance.log('TOGGLE: Attempt $attempt - verified=$verified');
+          await Logger.instance
+              .log('TOGGLE: Attempt $attempt - verified=$verified');
 
           if (verified || attempt == maxRetries) {
             return {
-              'success': true, 
-              'message': complete ? 'Marked as complete on Moodle' : 'Marked as incomplete on Moodle',
+              'success': true,
+              'message': complete
+                  ? 'Marked as complete on Moodle'
+                  : 'Marked as incomplete on Moodle',
               'verified': verified,
             };
           }
@@ -733,7 +839,11 @@ class MoodleService {
       }
 
       await Logger.instance.log('TOGGLE: Failed after retries');
-      return {'success': false, 'message': 'Failed to toggle completion after retries: ${lastError?.toString() ?? "Unknown error"}'};
+      return {
+        'success': false,
+        'message':
+            'Failed to toggle completion after retries: ${lastError?.toString() ?? "Unknown error"}'
+      };
     } finally {
       client.close();
     }
@@ -751,12 +861,13 @@ class MoodleService {
     final client = _createClient();
     try {
       await Logger.instance.log('UPLOAD: Starting upload for $taskUrl');
-      
+
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
         try {
           await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
         } catch (_) {
-          await Logger.instance.log('UPLOAD: Saved session expired, logging in fresh');
+          await Logger.instance
+              .log('UPLOAD: Saved session expired, logging in fresh');
           _cookies.clear();
           await _login(moodleUrl, username, password);
         }
@@ -768,11 +879,17 @@ class MoodleService {
       final cmid = uri.queryParameters['id'];
       if (cmid == null) {
         await Logger.instance.log('UPLOAD: Invalid task URL - no cmid');
-        return {'success': false, 'open_in_browser': true, 'url': taskUrl, 'message': 'Invalid task URL.'};
+        return {
+          'success': false,
+          'open_in_browser': true,
+          'url': taskUrl,
+          'message': 'Invalid task URL.'
+        };
       }
 
       // Step 1: Get edit submission page to extract form fields and current itemid
-      final editUrl = '$_baseUrl/mod/assign/view.php?id=$cmid&action=editsubmission';
+      final editUrl =
+          '$_baseUrl/mod/assign/view.php?id=$cmid&action=editsubmission';
       await Logger.instance.log('UPLOAD: Fetching edit page: $editUrl');
       final editResp = await _get(client, editUrl);
       final editDoc = html_parser.parse(editResp.body);
@@ -780,7 +897,13 @@ class MoodleService {
       final sesskey = _extractSesskey(editResp.body);
       if (sesskey == null) {
         await Logger.instance.log('UPLOAD: Could not find sesskey');
-        return {'success': false, 'open_in_browser': true, 'url': taskUrl, 'message': 'Could not find session key. Please upload in your browser.'};
+        return {
+          'success': false,
+          'open_in_browser': true,
+          'url': taskUrl,
+          'message':
+              'Could not find session key. Please upload in your browser.'
+        };
       }
       await Logger.instance.log('UPLOAD: Found sesskey: $sesskey');
 
@@ -809,9 +932,12 @@ class MoodleService {
 
       // Extract itemid from the file manager form
       int? itemid;
-      final fileManagerForm = editDoc.querySelector('form[id^="filemanager"]') ?? editDoc.querySelector('form[action*="repository_ajax"]');
+      final fileManagerForm =
+          editDoc.querySelector('form[id^="filemanager"]') ??
+              editDoc.querySelector('form[action*="repository_ajax"]');
       if (fileManagerForm != null) {
-        final itemidInput = fileManagerForm.querySelector('input[name="itemid"]');
+        final itemidInput =
+            fileManagerForm.querySelector('input[name="itemid"]');
         if (itemidInput != null) {
           itemid = int.tryParse(itemidInput.attributes['value'] ?? '');
           await Logger.instance.log('UPLOAD: Found itemid from form: $itemid');
@@ -819,7 +945,8 @@ class MoodleService {
       }
 
       if (itemid == null) {
-        final itemidMatch = RegExp(r"""itemid["']?\s*[:=]\s*["']?(\d+)""").firstMatch(editResp.body);
+        final itemidMatch = RegExp(r"""itemid["']?\s*[:=]\s*["']?(\d+)""")
+            .firstMatch(editResp.body);
         if (itemidMatch != null) {
           itemid = int.tryParse(itemidMatch.group(1)!);
           await Logger.instance.log('UPLOAD: Found itemid from regex: $itemid');
@@ -827,7 +954,8 @@ class MoodleService {
       }
 
       if (itemid == null) {
-        final inputMatch = RegExp(r'<input[^>]*name="itemid"[^>]*value="(\d+)"').firstMatch(editResp.body);
+        final inputMatch = RegExp(r'<input[^>]*name="itemid"[^>]*value="(\d+)"')
+            .firstMatch(editResp.body);
         if (inputMatch != null) {
           itemid = int.tryParse(inputMatch.group(1)!);
           await Logger.instance.log('UPLOAD: Found itemid from input: $itemid');
@@ -836,7 +964,8 @@ class MoodleService {
 
       if (itemid == null) {
         itemid = 0;
-        await Logger.instance.log('UPLOAD: Using default itemid=0 for new draft area');
+        await Logger.instance
+            .log('UPLOAD: Using default itemid=0 for new draft area');
       }
 
       // Step 2: Discover upload repository ID
@@ -866,13 +995,15 @@ class MoodleService {
             for (final r in repos) {
               if (r is Map && r['type'] == 'upload' && r['id'] != null) {
                 tryAddRepoId(r['id'].toString());
-                await Logger.instance.log('UPLOAD: JS config upload repo: id=${r['id']}');
+                await Logger.instance
+                    .log('UPLOAD: JS config upload repo: id=${r['id']}');
               }
             }
             for (final r in repos) {
               if (r is Map && r['type'] != 'upload' && r['id'] != null) {
                 tryAddRepoId(r['id'].toString());
-                await Logger.instance.log('UPLOAD: JS config other repo: type=${r['type']}, id=${r['id']}');
+                await Logger.instance.log(
+                    'UPLOAD: JS config other repo: type=${r['type']}, id=${r['id']}');
               }
             }
           }
@@ -894,13 +1025,16 @@ class MoodleService {
           final repos = repoData is List
               ? repoData
               : repoData is Map
-                  ? (repoData['repositories'] as List? ?? repoData['list'] as List? ?? const [])
+                  ? (repoData['repositories'] as List? ??
+                      repoData['list'] as List? ??
+                      const [])
                   : const [];
 
           for (final repo in repos) {
             if (repo is Map && repo['type'] == 'upload' && repo['id'] != null) {
               tryAddRepoId(repo['id'].toString());
-              await Logger.instance.log('UPLOAD: API upload repo: name=${repo['name']}, id=${repo['id']}');
+              await Logger.instance.log(
+                  'UPLOAD: API upload repo: name=${repo['name']}, id=${repo['id']}');
             }
           }
           for (final repo in repos) {
@@ -962,7 +1096,8 @@ class MoodleService {
           'success': false,
           'open_in_browser': true,
           'url': taskUrl,
-          'message': 'Could not find Moodle\'s upload repository for this assignment. Please upload in your browser.',
+          'message':
+              'Could not find Moodle\'s upload repository for this assignment. Please upload in your browser.',
         };
       }
 
@@ -996,8 +1131,11 @@ class MoodleService {
         if (payload['event'] == 'fileexists') return null;
 
         final itemIdFromResponse = asInt(payload['itemid'] ?? payload['id']);
-        final filenameFromResponse = asNonEmptyString(payload['filename'] ?? payload['file']);
-        if (itemIdFromResponse != null || filenameFromResponse != null || payload['url'] != null) {
+        final filenameFromResponse =
+            asNonEmptyString(payload['filename'] ?? payload['file']);
+        if (itemIdFromResponse != null ||
+            filenameFromResponse != null ||
+            payload['url'] != null) {
           return {
             'itemid': itemIdFromResponse ?? itemid,
             'filename': filenameFromResponse ?? originalFilename,
@@ -1019,14 +1157,17 @@ class MoodleService {
       }
 
       Future<Map<String, dynamic>> tryUpload(String rid) async {
-        final file = await http.MultipartFile.fromPath('repo_upload_file', filePath);
-        final uploadRequest = http.MultipartRequest('POST', Uri.parse(uploadUrl))
-          ..headers.addAll({..._headers(), 'Accept': 'application/json, text/plain, */*'})
+        final file =
+            await http.MultipartFile.fromPath('repo_upload_file', filePath);
+        final uploadRequest = http.MultipartRequest(
+            'POST', Uri.parse(uploadUrl))
+          ..headers.addAll(
+              {..._headers(), 'Accept': 'application/json, text/plain, */*'})
           ..fields['action'] = 'upload'
           ..fields['sesskey'] = sesskey
           ..fields['repo_id'] = rid
           ..fields['env'] = 'filemanager'
-          ..fields['itemid'] = itemid.toString()
+          ..fields['itemid'] = '$itemid'
           ..fields['title'] = originalFilename
           ..fields['savepath'] = '/'
           ..fields['author'] = username
@@ -1035,15 +1176,21 @@ class MoodleService {
 
         if (contextId != null) uploadRequest.fields['ctx_id'] = contextId;
         if (maxbytes != null) uploadRequest.fields['maxbytes'] = maxbytes;
-        if (areamaxbytes != null) uploadRequest.fields['areamaxbytes'] = areamaxbytes;
+        if (areamaxbytes != null)
+          uploadRequest.fields['areamaxbytes'] = areamaxbytes;
 
         await Logger.instance.log('UPLOAD: Trying repo_id=$rid');
-        final stream = await client.send(uploadRequest).timeout(const Duration(seconds: 60));
+        final stream = await client
+            .send(uploadRequest)
+            .timeout(const Duration(seconds: 60));
         final resp = await http.Response.fromStream(stream);
         _parseCookies(resp);
         final body = resp.body;
 
-        await Logger.instance.log('UPLOAD: response status=${resp.statusCode}, length=${body.length}');
+        await Logger.instance.log(
+            'UPLOAD: response status=${resp.statusCode}, length=${body.length}');
+        await Logger.instance.log(
+            'UPLOAD: response preview=${body.substring(0, body.length.clamp(0, 300))}');
 
         try {
           final data = jsonDecode(body);
@@ -1051,19 +1198,28 @@ class MoodleService {
           if (success != null) return success;
 
           if (data is Map && data['error'] != null) {
-            await Logger.instance.log('UPLOAD: Moodle error for repo_id=$rid: ${data['error']}');
+            await Logger.instance
+                .log('UPLOAD: Moodle error for repo_id=$rid: ${data['error']}');
             return {'error': data['error'].toString()};
           }
 
           if (isFileExistsEvent(data)) {
-            await Logger.instance.log('UPLOAD: File exists event for repo_id=$rid - file may need different name');
-            return {'error': 'A file with this name already exists. Try renaming the file or upload via browser.'};
+            await Logger.instance.log(
+                'UPLOAD: File exists event for repo_id=$rid - file may need different name');
+            return {
+              'error':
+                  'A file with this name already exists. Try renaming the file or upload via browser.'
+            };
           }
         } catch (_) {}
 
         // Check for errors in response
-        if (body.contains('error') || body.contains('Error') || body.contains('not logged in') || body.contains('invalid')) {
-          await Logger.instance.log('UPLOAD: Error in response for repo_id=$rid');
+        if (body.contains('error') ||
+            body.contains('Error') ||
+            body.contains('not logged in') ||
+            body.contains('invalid')) {
+          await Logger.instance
+              .log('UPLOAD: Error in response for repo_id=$rid');
           return {'error': parseUploadError(body)};
         }
 
@@ -1094,21 +1250,25 @@ class MoodleService {
       }
 
       if (uploadedItemid == null && uploadedFilename == null) {
-        await Logger.instance.log('UPLOAD: All repo_ids failed. Last error: $lastError');
+        await Logger.instance
+            .log('UPLOAD: All repo_ids failed. Last error: $lastError');
         return {
           'success': false,
           'open_in_browser': true,
           'url': taskUrl,
-          'message': 'File upload to draft area failed${lastError.isNotEmpty ? ': $lastError' : ''}. Please try in your browser.',
+          'message':
+              'File upload to draft area failed${lastError.isNotEmpty ? ': $lastError' : ''}. Please try in your browser.',
           'debug': lastError,
         };
       }
 
       final finalItemid = uploadedItemid ?? itemid;
-      await Logger.instance.log('UPLOAD: Using final itemid: $finalItemid, repo_id=$usedRepoId');
+      await Logger.instance
+          .log('UPLOAD: Using final itemid: $finalItemid, repo_id=$usedRepoId');
 
       // Step 3: Submit the assignment with the uploaded file reference
-      await Logger.instance.log('UPLOAD: Submitting assignment with savesubmission');
+      await Logger.instance
+          .log('UPLOAD: Submitting assignment with savesubmission');
 
       // Extract ALL form fields from the edit submission form.
       // This includes plugin-specific fields like assignsubmission_file_filemanager.
@@ -1116,7 +1276,8 @@ class MoodleService {
       String? formActionUrl;
 
       String submitButtonValue = 'Save changes';
-      final submitBtnEl = editDoc.querySelector('input[type="submit"][name="submitbutton"]');
+      final submitBtnEl =
+          editDoc.querySelector('input[type="submit"][name="submitbutton"]');
       if (submitBtnEl != null) {
         final val = submitBtnEl.attributes['value'];
         if (val != null && val.isNotEmpty) submitButtonValue = val;
@@ -1125,19 +1286,21 @@ class MoodleService {
       {
         // Try multiple selectors to find the submission form (ID varies by Moodle version)
         var form = editDoc.querySelector('form#mod_assign_submission_form');
-        if (form == null) form = editDoc.querySelector('form.mform');
-        if (form == null) form = editDoc.querySelector('form[action*="view.php"]');
+        form ??= editDoc.querySelector('form.mform');
+        form ??= editDoc.querySelector('form[action*="view.php"]');
         if (form != null) {
           final action = form.attributes['action'] ?? '';
           if (action.isNotEmpty) {
             // Resolve relative action URL properly against the edit page URL
             formActionUrl = Uri.parse(editUrl).resolve(action).toString();
           }
-          await Logger.instance.log('UPLOAD: Found form, action=$action, resolved=$formActionUrl');
+          await Logger.instance.log(
+              'UPLOAD: Found form, action=$action, resolved=$formActionUrl');
 
           // First pass: collect checkbox names so we can skip their hidden value=0 companions
           final checkboxNames = <String>{};
-          for (final cb in form.querySelectorAll('input[type="checkbox"], input[type="radio"]')) {
+          for (final cb in form.querySelectorAll(
+              'input[type="checkbox"], input[type="radio"]')) {
             final n = cb.attributes['name'];
             if (n != null && n.isNotEmpty) checkboxNames.add(n);
           }
@@ -1162,7 +1325,8 @@ class MoodleService {
                   formFields[name] = input.attributes['value'] ?? '1';
                 }
               } else if (type == 'submit' || type == 'button') {
-                formFields[name] = input.attributes['value'] ?? submitButtonValue;
+                formFields[name] =
+                    input.attributes['value'] ?? submitButtonValue;
               } else {
                 formFields[name] = input.attributes['value'] ?? '';
               }
@@ -1176,7 +1340,8 @@ class MoodleService {
             }
           }
         } else {
-          await Logger.instance.log('UPLOAD: WARNING - Could not find mod_assign_submission_form');
+          await Logger.instance.log(
+              'UPLOAD: WARNING - Could not find mod_assign_submission_form');
         }
       }
 
@@ -1190,6 +1355,10 @@ class MoodleService {
         }
       }
 
+      // Remove cancel buttons — they cause Moodle's is_cancelled() to discard the submission
+      formFields.remove('cancel');
+      formFields.remove('submitbutton2');
+
       // Ensure sesskey and qf marker are present
       if (!formFields.containsKey('sesskey')) {
         formFields['sesskey'] = sesskey;
@@ -1200,38 +1369,61 @@ class MoodleService {
 
       // If no filemanager field found, try the known pattern
       if (foundFmField == null) {
-        final anyFm = editDoc.querySelector('input[type="hidden"][name\$="filemanager"]');
+        final anyFm =
+            editDoc.querySelector('input[type="hidden"][name\$="filemanager"]');
         if (anyFm != null) {
           final name = anyFm.attributes['name'];
           if (name != null && name.isNotEmpty && name != 'itemid') {
             formFields[name] = finalItemid.toString();
-            await Logger.instance.log('UPLOAD: Fallback set $name = $finalItemid');
+            await Logger.instance
+                .log('UPLOAD: Fallback set $name = $finalItemid');
           }
         }
       }
 
-      await Logger.instance.log('UPLOAD: Form fields: ${formFields.keys.join(', ')}');
+      await Logger.instance
+          .log('UPLOAD: Form fields: ${formFields.keys.join(', ')}');
 
-      // Determine the submission URL
-      final submitUrl = formActionUrl ??
-          '$_baseUrl/mod/assign/view.php?id=$cmid&action=savesubmission';
+      // Ensure id and itemid are present in form fields with correct values
+      if (!formFields.containsKey('id')) {
+        formFields['id'] = cmid;
+      }
+      formFields['itemid'] = finalItemid.toString();
+
+      // Determine the submission URL — always force action=savesubmission
+      final submitUrl = Uri.parse(formActionUrl ?? '$_baseUrl/mod/assign/view.php')
+          .resolve('?id=$cmid&action=savesubmission')
+          .toString();
 
       // Build headers with Referer for CSRF compatibility
       Map<String, String> submitHeaders = _headers();
       submitHeaders['Referer'] = editUrl;
 
       Future<String?> doSaveSubmission(Map<String, String> fields) async {
-        await Logger.instance.log('UPLOAD: POST savesubmission with fields: ${fields.keys.join(", ")}');
-        final resp = await client.post(
-          Uri.parse(submitUrl),
-          headers: submitHeaders,
-          body: fields,
-        ).timeout(_requestTimeout);
+        await Logger.instance.log(
+            'UPLOAD: POST savesubmission with fields: ${fields.keys.join(", ")}');
+        final resp = await client
+            .post(
+              Uri.parse(submitUrl),
+              headers: submitHeaders,
+              body: fields,
+            )
+            .timeout(_requestTimeout);
 
-        await Logger.instance.log('UPLOAD: Savesubmission response status: ${resp.statusCode}');
-        await Logger.instance.log('UPLOAD: Savesubmission response length: ${resp.body.length}');
+        await Logger.instance
+            .log('UPLOAD: Savesubmission response status: ${resp.statusCode}');
+        await Logger.instance
+            .log('UPLOAD: Savesubmission response length: ${resp.body.length}');
+        await Logger.instance
+            .log('UPLOAD: Savesubmission content-type: ${resp.headers["content-type"]}');
+        await Logger.instance.log(
+            'UPLOAD: Savesubmission preview=${resp.body.substring(0, resp.body.length.clamp(0, 500))}');
 
         final body = resp.body;
+
+        if (resp.statusCode >= 400) {
+          return 'Moodle returned HTTP ${resp.statusCode}. Please try in your browser.';
+        }
 
         if (body.contains('Your submission has been saved') ||
             body.contains('Su entrega ha sido guardada') ||
@@ -1246,29 +1438,30 @@ class MoodleService {
           return null;
         }
 
-        if (body.contains('action=editsubmission')) {
-          _saveDebugResponse(body, 'savesubmission_editform');
-          return 'Submission form was rejected by Moodle. Please try in your browser.';
-        }
-
-        if (body.contains('class="notifyproblem"') ||
-            body.contains('class="alert alert-danger"') ||
-            body.contains('class="error"')) {
-          _saveDebugResponse(body, 'savesubmission_error');
-          return 'Moodle rejected the submission. Please try in your browser.';
-        }
-
+        // If we got a 200 OK but no success text, the submission might still have
+        // succeeded (some themes redirect differently). Don't reject yet — we'll
+        // verify against the actual assignment page in Step 4.
+        _saveDebugResponse(body, 'savesubmission_toverify');
+        await Logger.instance.log(
+            'UPLOAD: savesubmission returned 200 but no success text detected — will verify from overview page');
         return null;
       }
 
       // Try submission: first include submissionstatement if the form wants it
       String? submitError;
 
+      // Always include submissionstatement and submitforgrading — harmless if not needed
+      formFields['submissionstatement'] = '1';
+      formFields['submitforgrading'] = '1';
+
       // If the form HTML already contains submissionstatement field, include it from start
-      bool formHasSubmissionStatement = formFields.containsKey('submissionstatement');
+      bool formHasSubmissionStatement =
+          formFields.containsKey('submissionstatement');
       bool formHasSubmitForGrading = formFields.containsKey('submitforgrading');
-      bool bodyHasSubmissionStatement = editResp.body.contains('name="submissionstatement"');
-      bool bodyHasSubmitForGrading = editResp.body.contains('name="submitforgrading"');
+      bool bodyHasSubmissionStatement =
+          editResp.body.contains('name="submissionstatement"');
+      bool bodyHasSubmitForGrading =
+          editResp.body.contains('name="submitforgrading"');
 
       if (formHasSubmissionStatement || bodyHasSubmissionStatement) {
         formFields['submissionstatement'] = '1';
@@ -1280,15 +1473,18 @@ class MoodleService {
       submitError = await doSaveSubmission(formFields);
 
       // Second attempt: if failed, try without submissionstatement (edge case)
-      if (submitError != null && formFields.containsKey('submissionstatement')) {
-        await Logger.instance.log('UPLOAD: Retrying without submissionstatement');
+      if (submitError != null &&
+          formFields.containsKey('submissionstatement')) {
+        await Logger.instance
+            .log('UPLOAD: Retrying without submissionstatement');
         final retryFields = Map<String, String>.from(formFields);
         retryFields.remove('submissionstatement');
         submitError = await doSaveSubmission(retryFields);
       }
 
       if (submitError != null) {
-        await Logger.instance.log('UPLOAD: savesubmission failed: $submitError');
+        await Logger.instance
+            .log('UPLOAD: savesubmission failed: $submitError');
         return {
           'success': false,
           'open_in_browser': true,
@@ -1300,13 +1496,15 @@ class MoodleService {
       // Step 4: Verify submission by checking the assignment page
       await Future.delayed(const Duration(milliseconds: 500));
       await Logger.instance.log('UPLOAD: Verifying submission');
-      final verifyResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
+      final verifyResp =
+          await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
       final verifyDoc = html_parser.parse(verifyResp.body);
 
       // Check for "Your submission has been saved" confirmation
-      final submissionSaved = verifyResp.body.contains('Your submission has been saved') ||
-          verifyResp.body.contains('Su entrega ha sido guardada') ||
-          verifyResp.body.contains('class="notifysuccess"');
+      final submissionSaved =
+          verifyResp.body.contains('Your submission has been saved') ||
+              verifyResp.body.contains('Su entrega ha sido guardada') ||
+              verifyResp.body.contains('class="notifysuccess"');
 
       // Check for submission status indicators
       bool hasSubmission = false;
@@ -1314,10 +1512,31 @@ class MoodleService {
       String? submittedFileName;
       final List<Map<String, dynamic>> submissionFilesWithUrls = [];
 
-      final statusEl = verifyDoc.querySelector('[class*="submissionstatustext"], [class*="submissionstatus"], [class*="submission_status"], [data-region*="submission"] > .status');
+      // Check for "Edit submission" button — proves there IS a saved submission
+      if (!hasSubmission) {
+        final editBtns = verifyDoc.querySelectorAll(
+            'input[value="Edit submission"], a[href*="action=editsubmission"]');
+        for (final btn in editBtns) {
+          final btnText = btn.text.trim().toLowerCase();
+          final btnVal =
+              (btn.attributes['value'] ?? '').toLowerCase();
+          if (btnText.contains('edit submission') ||
+              btnVal.contains('edit submission')) {
+            hasSubmission = true;
+            submissionStatus ??= 'Submitted';
+            break;
+          }
+        }
+      }
+
+      final statusEl = verifyDoc.querySelector(
+          '[class*="submissionstatustext"], [class*="submissionstatus"], [class*="submission_status"], [data-region*="submission"] > .status');
       if (statusEl != null) {
         final statusText = statusEl.text.trim().toLowerCase();
-        if (statusText.contains('submitted') || statusText.contains('entregado') || statusText.contains('graded') || statusText.contains('calificado')) {
+        if (statusText.contains('submitted') ||
+            statusText.contains('entregado') ||
+            statusText.contains('graded') ||
+            statusText.contains('calificado')) {
           hasSubmission = true;
           submissionStatus = statusEl.text.trim();
         }
@@ -1353,7 +1572,8 @@ class MoodleService {
       for (final sel in uploadSubmissionSelectors) {
         final elements = verifyDoc.querySelectorAll(sel);
         for (final el in elements) {
-          final links = el.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
+          final links = el.querySelectorAll(
+              'a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
           for (final link in links) {
             final href = link.attributes['href'];
             if (href == null) continue;
@@ -1361,20 +1581,27 @@ class MoodleService {
             if (isInIntroArea(link)) continue;
 
             String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-            if (filename.isEmpty || filename == 'Download' || filename == 'download') {
+            if (filename.isEmpty ||
+                filename == 'Download' ||
+                filename == 'download') {
               final parent = link.parent;
               if (parent != null) {
-                final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-                if (siblingText.length > 1 && siblingText.length < 200) filename = siblingText;
+                final siblingText =
+                    parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+                if (siblingText.length > 1 && siblingText.length < 200)
+                  filename = siblingText;
               }
             }
             if (filename.isEmpty || filename.length > 200) {
-              filename = Uri.decodeComponent(href.split('/').lastWhere((s) => s.contains('.'), orElse: () => href.split('/').last));
+              filename = Uri.decodeComponent(href.split('/').lastWhere(
+                  (s) => s.contains('.'),
+                  orElse: () => href.split('/').last));
             }
             final resolved = _resolveUrl(href);
             if (resolved.isNotEmpty && uploadSeenUrls.add(resolved)) {
               hasSubmission = true;
-              if (submittedFileName == null) submittedFileName = filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+              submittedFileName ??=
+                  filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
               submissionFilesWithUrls.add({
                 'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
                 'url': resolved,
@@ -1387,15 +1614,29 @@ class MoodleService {
         }
       }
 
-      await Logger.instance.log('UPLOAD: Verification result - hasSubmission: $hasSubmission, status: $submissionStatus, files: ${submissionFilesWithUrls.length}, submissionSaved: $submissionSaved');
+      await Logger.instance.log(
+          'UPLOAD: Verification result - hasSubmission: $hasSubmission, status: $submissionStatus, files: ${submissionFilesWithUrls.length}, submissionSaved: $submissionSaved');
+
+      if (!hasSubmission) {
+        await Logger.instance.log('UPLOAD: Verification failed - no submission found on overview page');
+        _saveDebugResponse(verifyResp.body, 'verify_failed');
+        return {
+          'success': false,
+          'open_in_browser': true,
+          'url': taskUrl,
+          'message': 'The file was uploaded to Moodle but the submission form was not accepted. Please submit in your browser.',
+        };
+      }
 
       // Update local DB with submission info
       final db = await DatabaseService.instance.database;
       List<Map<String, dynamic>> existing;
       if (taskId != null) {
-        existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+        existing =
+            await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
       } else {
-        existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+        existing =
+            await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
       }
       if (existing.isNotEmpty) {
         final matchId = existing.first['id'] as int;
@@ -1403,14 +1644,16 @@ class MoodleService {
             ? submissionFilesWithUrls
             : [
                 {
-                  'filename': uploadedFilename ?? submittedFileName ?? originalFilename,
+                  'filename':
+                      uploadedFilename ?? submittedFileName ?? originalFilename,
                   'url': null,
                   'size': await File(filePath).length(),
                   'uploaded_at': DateTime.now().toIso8601String(),
                   'itemid': finalItemid,
                 }
               ];
-        await db.update('tasks',
+        await db.update(
+          'tasks',
           {
             'file_uploaded': hasSubmission ? 1 : 0,
             'is_submitted': hasSubmission ? 1 : 0,
@@ -1418,7 +1661,8 @@ class MoodleService {
             'submission_status': submissionStatus ?? 'Submitted via app',
             'last_submission_check': DateTime.now().toIso8601String(),
           },
-          where: 'id = ?', whereArgs: [matchId],
+          where: 'id = ?',
+          whereArgs: [matchId],
         );
       }
 
@@ -1427,15 +1671,22 @@ class MoodleService {
           : null;
 
       return {
-        'success': true, 
-        'message': hasSubmission ? 'File uploaded and submission saved' : 'File uploaded (submission may need verification)',
+        'success': true,
+        'message': hasSubmission
+            ? 'File uploaded and submission saved'
+            : 'File uploaded (submission may need verification)',
         'filename': uploadedFilename ?? originalFilename,
         'file_url': uploadedFileUrl,
         'verified': hasSubmission,
       };
     } catch (e) {
       await Logger.instance.log('UPLOAD: Exception: $e');
-      return {'success': false, 'open_in_browser': true, 'url': taskUrl, 'message': 'Upload failed: $e'};
+      return {
+        'success': false,
+        'open_in_browser': true,
+        'url': taskUrl,
+        'message': 'Upload failed: $e'
+      };
     } finally {
       client.close();
     }
@@ -1451,13 +1702,15 @@ class MoodleService {
   }) async {
     final client = _createClient();
     try {
-      await Logger.instance.log('REMOVE_SUB: Starting remove submission for $taskUrl');
+      await Logger.instance
+          .log('REMOVE_SUB: Starting remove submission for $taskUrl');
 
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
         try {
           await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
         } catch (_) {
-          await Logger.instance.log('REMOVE_SUB: Saved session expired, logging in fresh');
+          await Logger.instance
+              .log('REMOVE_SUB: Saved session expired, logging in fresh');
           _cookies.clear();
           await _login(moodleUrl, username, password);
         }
@@ -1472,7 +1725,9 @@ class MoodleService {
       }
 
       // Step 1: Get the assignment page to find sesskey and removal elements
-      final assignResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
+      final assignResp =
+          await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
+      _saveDebugResponse(assignResp.body, 'remove_assign_page');
       final assignDoc = html_parser.parse(assignResp.body);
       final sesskey = _extractSesskey(assignResp.body);
       if (sesskey == null) {
@@ -1486,7 +1741,8 @@ class MoodleService {
       // Strategy A: Find any element (a, button, input) linking to removesubmission
       {
         // Look for any element with an href or action pointing to removesubmission
-        for (final el in assignDoc.querySelectorAll('a[href*="removesubmission"], a[href*="remove_submission"], form[action*="removesubmission"]')) {
+        for (final el in assignDoc.querySelectorAll(
+            'a[href*="removesubmission"], a[href*="remove_submission"], form[action*="removesubmission"]')) {
           final href = el.attributes['href'] ?? el.attributes['action'] ?? '';
           if (href.contains('removesubmission')) {
             removeLinkUrl = href;
@@ -1494,45 +1750,64 @@ class MoodleService {
           }
         }
         if (removeLinkUrl == null) {
-          // Try finding by text content
-          for (final el in assignDoc.querySelectorAll('a, button, input[type="submit"], input[type="button"], span[role="button"]')) {
+          for (final el in assignDoc.querySelectorAll(
+              'a, button, input[type="submit"], input[type="button"], span[role="button"]')) {
             final text = el.text.trim().toLowerCase();
-            final type = (el.attributes['type'] ?? '').toLowerCase();
             final name = (el.attributes['name'] ?? '').toLowerCase();
-            if (text.contains('remove') || text.contains('eliminar') || text.contains('delete') ||
-                name.contains('remove') || name.contains('eliminar') || name.contains('delete')) {
-              final href = el.attributes['href'] ?? el.attributes['formaction'] ?? '';
+            if (text.contains('remove') ||
+                text.contains('eliminar') ||
+                text.contains('borrar') ||
+                text.contains('delete') ||
+                name.contains('remove') ||
+                name.contains('eliminar') ||
+                name.contains('borrar') ||
+                name.contains('delete')) {
+              final href =
+                  el.attributes['href'] ?? el.attributes['formaction'] ?? '';
               if (href.contains('removesubmission')) {
                 removeLinkUrl = href;
                 break;
               }
-              // If it's an input button, look for a surrounding form
-              if (type == 'submit' || type == 'button') {
-                // Walk up to find the form
-                var parent = el.parent;
-                while (parent != null) {
-                  if (parent.localName == 'form') {
-                    final action = parent.attributes['action'] ?? '';
-                    if (action.contains('removesubmission')) {
-                      removeLinkUrl = action;
+              var parent = el.parent;
+              while (parent != null) {
+                if (parent.localName == 'form') {
+                  final action = parent.attributes['action'] ?? '';
+                  if (action.contains('removesubmission')) {
+                    removeLinkUrl = action;
+                    break;
+                  }
+                  final hiddenAction = parent.querySelector('input[type="hidden"][name="action"]');
+                  if (hiddenAction != null) {
+                    final hiddenVal = hiddenAction.attributes['value'] ?? '';
+                    if (hiddenVal.contains('removesubmission')) {
+                      final actionUri = Uri.tryParse(action);
+                      if (actionUri != null && actionUri.queryParameters.containsKey('id')) {
+                        removeLinkUrl = '$action&action=$hiddenVal';
+                      } else {
+                        removeLinkUrl = 'view.php?id=$cmid&action=$hiddenVal';
+                      }
                       break;
                     }
                   }
-                  parent = parent.parent;
                 }
-                if (removeLinkUrl != null) break;
+                parent = parent.parent;
               }
+              if (removeLinkUrl != null) break;
             }
           }
         }
       }
 
-      await Logger.instance.log('REMOVE_SUB: Found removal link: $removeLinkUrl');
+      await Logger.instance
+          .log('REMOVE_SUB: Found removal link: $removeLinkUrl');
 
       // Strategy B: Follow the found link to get the confirmation page
       if (removeLinkUrl != null && removeLinkUrl.isNotEmpty && !remoteSuccess) {
         try {
-          final resolvedUrl = Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid').resolve(removeLinkUrl).toString();
+          final resolvedUrl =
+              Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid')
+                  .resolve(removeLinkUrl)
+                  .toString();
           await Logger.instance.log('REMOVE_SUB: Following: $resolvedUrl');
           final confirmResp = await _get(client, resolvedUrl);
           final confirmBody = confirmResp.body;
@@ -1555,7 +1830,8 @@ class MoodleService {
             );
             if (confirmForm != null) {
               final formAction = confirmForm.attributes['action'] ?? '';
-              final actionUrl = Uri.parse(resolvedUrl).resolve(formAction).toString();
+              final actionUrl =
+                  Uri.parse(resolvedUrl).resolve(formAction).toString();
               final formData = <String, String>{
                 'id': cmid,
                 'action': 'removesubmission',
@@ -1563,23 +1839,42 @@ class MoodleService {
                 'confirm': '1',
               };
               // Extract any extra hidden fields from the confirmation form
-              for (final input in confirmForm.querySelectorAll('input[type="hidden"]')) {
+              for (final input
+                  in confirmForm.querySelectorAll('input[type="hidden"]')) {
                 final name = input.attributes['name'];
                 final val = input.attributes['value'] ?? '';
                 if (name != null && name.isNotEmpty) formData[name] = val;
               }
-              await Logger.instance.log('REMOVE_SUB: Submitting confirmation: $actionUrl');
-              final postResp = await client.post(
-                Uri.parse(actionUrl),
-                headers: {..._headers(), 'Referer': resolvedUrl},
-                body: formData,
-              ).timeout(_requestTimeout);
+              // Remove cancel button to avoid Moodle cancelling the action
+              formData.remove('cancel');
+              await Logger.instance
+                  .log('REMOVE_SUB: Submitting confirmation: $actionUrl');
+              final postResp = await client
+                  .post(
+                    Uri.parse(actionUrl),
+                    headers: {..._headers(), 'Referer': resolvedUrl},
+                    body: formData,
+                  )
+                  .timeout(_requestTimeout);
+              _parseCookies(postResp);
+              final status = postResp.statusCode;
               final postBody = postResp.body;
-              remoteSuccess = postBody.contains('Your submission has been removed') ||
-                  postBody.contains('Su entrega ha sido eliminada') ||
-                  postBody.contains('Tu entrega ha sido eliminada') ||
-                  postBody.contains('class="notifysuccess"') ||
-                  postBody.contains('alert-success');
+              if (status == 302 || status == 303) {
+                await Logger.instance.log(
+                    'REMOVE_SUB: POST returned $status (redirect) — treat as success');
+                remoteSuccess = true;
+              } else {
+                remoteSuccess =
+                    postBody.contains('Your submission has been removed') ||
+                        postBody.contains('Su entrega ha sido eliminada') ||
+                        postBody.contains('Tu entrega ha sido eliminada') ||
+                        postBody.contains('class="notifysuccess"') ||
+                        postBody.contains('alert-success');
+                if (!remoteSuccess) {
+                  await Logger.instance.log(
+                      'REMOVE_SUB: Confirmation response preview=${postBody.substring(0, postBody.length.clamp(0, 300))}');
+                }
+              }
             }
           }
         } catch (e) {
@@ -1591,10 +1886,14 @@ class MoodleService {
       if (!remoteSuccess) {
         await Logger.instance.log('REMOVE_SUB: Direct GET removesubmission');
         try {
-          final getResp = await _get(client,
+          final getResp = await _get(
+            client,
             '$_baseUrl/mod/assign/view.php?id=$cmid&action=removesubmission&sesskey=$sesskey&confirm=1',
           );
           final body = getResp.body;
+          await Logger.instance.log(
+              'REMOVE_SUB: GET response preview=${body.substring(0, body.length.clamp(0, 300))}');
+          _saveDebugResponse(body, 'remove_get');
           remoteSuccess = body.contains('Your submission has been removed') ||
               body.contains('Su entrega ha sido eliminada') ||
               body.contains('Tu entrega ha sido eliminada') ||
@@ -1611,7 +1910,10 @@ class MoodleService {
         try {
           final postResp = await client.post(
             Uri.parse('$_baseUrl/mod/assign/view.php'),
-            headers: {..._headers(), 'Referer': '$_baseUrl/mod/assign/view.php?id=$cmid'},
+            headers: {
+              ..._headers(),
+              'Referer': '$_baseUrl/mod/assign/view.php?id=$cmid'
+            },
             body: {
               'id': cmid,
               'action': 'removesubmission',
@@ -1619,12 +1921,26 @@ class MoodleService {
               'confirm': '1',
             },
           ).timeout(_requestTimeout);
+          _parseCookies(postResp);
+          final status = postResp.statusCode;
           final body = postResp.body;
-          remoteSuccess = body.contains('Your submission has been removed') ||
-              body.contains('Su entrega ha sido eliminada') ||
-              body.contains('Tu entrega ha sido eliminada') ||
-              body.contains('class="notifysuccess"') ||
-              body.contains('alert-success');
+          // Moodle typically redirects (302) after successful removal.
+          // The http package does not follow redirects for POST, so check
+          // the status code rather than the (empty) body.
+          if (status == 302 || status == 303) {
+            await Logger.instance.log(
+                'REMOVE_SUB: POST returned $status (redirect) — treat as success');
+            remoteSuccess = true;
+          } else {
+            await Logger.instance.log(
+                'REMOVE_SUB: POST response preview=${body.substring(0, body.length.clamp(0, 300))}');
+            _saveDebugResponse(body, 'remove_post');
+            remoteSuccess = body.contains('Your submission has been removed') ||
+                body.contains('Su entrega ha sido eliminada') ||
+                body.contains('Tu entrega ha sido eliminada') ||
+                body.contains('class="notifysuccess"') ||
+                body.contains('alert-success');
+          }
         } catch (e) {
           await Logger.instance.log('REMOVE_SUB: Direct POST failed: $e');
         }
@@ -1632,11 +1948,16 @@ class MoodleService {
 
       // Strategy E: Re-fetch assignment page to verify submission is gone
       if (!remoteSuccess) {
-        await Logger.instance.log('REMOVE_SUB: Verifying by re-fetching assignment page');
+        await Logger.instance
+            .log('REMOVE_SUB: Verifying by re-fetching assignment page');
         try {
           await Future.delayed(const Duration(milliseconds: 500));
-          final verifyResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
+          final verifyResp =
+              await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
           final verifyBody = verifyResp.body;
+          _saveDebugResponse(verifyBody, 'remove_verify');
+          await Logger.instance.log(
+              'REMOVE_SUB: Verify page preview=${verifyBody.substring(0, verifyBody.length.clamp(0, 300))}');
 
           // If there's a success notification on the page, submission was removed
           if (verifyBody.contains('Your submission has been removed') ||
@@ -1645,33 +1966,57 @@ class MoodleService {
               verifyBody.contains('class="notifysuccess"') ||
               verifyBody.contains('alert-success')) {
             remoteSuccess = true;
+            await Logger.instance.log('REMOVE_SUB: Verified - success text found');
           } else {
-            // Check if there's no longer a submitted file on the page
-            // Look for the "Add submission" button (means submission was cleared)
+            // Check if there's no longer a submitted file on the page using
+            // multiple strategies: look for ANY "start submission" link,
+            // check submission status text, check for file links
             final verifyDoc = html_parser.parse(verifyBody);
-            final addSubmissionLinks = verifyDoc.querySelectorAll(
-              'a[href*="editsubmission"], a[href*="addsubmission"]',
+
+            // Look for links that let the user start a new submission
+            final newSubmissionLinks = verifyDoc.querySelectorAll(
+              'a[href*="addsubmission"], a[href*="add"], form[action*="addsubmission"]',
             );
-            bool canAddSubmission = false;
-            for (final link in addSubmissionLinks) {
+            bool canStartNew = false;
+            for (final link in newSubmissionLinks) {
               final text = link.text.trim().toLowerCase();
-              if (text.contains('add') || text.contains('edit') || text.contains('agregar') || text.contains('editar') || text.contains('añadir')) {
-                canAddSubmission = true;
+              if (text.contains('add') ||
+                  text.contains('nueva') ||
+                  text.contains('new') ||
+                  text.contains('start') ||
+                  text.contains('comenzar') ||
+                  text.contains('agregar') ||
+                  text.contains('enviar')) {
+                canStartNew = true;
                 break;
               }
             }
-            // Also check files from submission area
+
+            // Check for submission status text indicating no submission
+            final statusText = (verifyDoc.text ?? '').toLowerCase();
+            bool showsNoSubmission =
+                statusText.contains('no submission') ||
+                statusText.contains('sin entrega') ||
+                statusText.contains('not submitted') ||
+                statusText.contains('no entregado') ||
+                statusText.contains('no attempt') ||
+                statusText.contains('ningún intento');
+
+            // Check files from submission area
             final fileLinks = verifyDoc.querySelectorAll(
               '[data-region="submission-content"] a[href*="pluginfile.php"], '
-              '[data-region="submission-received"] a[href*="pluginfile.php"]',
+              '[data-region="submission-received"] a[href*="pluginfile.php"], '
+              '.submissionplugins a[href*="pluginfile.php"]',
             );
-            if (canAddSubmission && fileLinks.isEmpty) {
+            if ((canStartNew || showsNoSubmission) && fileLinks.isEmpty) {
               remoteSuccess = true;
-              await Logger.instance.log('REMOVE_SUB: Verified - no files found and add link present');
+              await Logger.instance.log(
+                  'REMOVE_SUB: Verified - no files and can start new submission');
             }
           }
         } catch (e) {
-          await Logger.instance.log('REMOVE_SUB: Verification fetch failed: $e');
+          await Logger.instance
+              .log('REMOVE_SUB: Verification fetch failed: $e');
         }
       }
 
@@ -1680,48 +2025,67 @@ class MoodleService {
         final db = await DatabaseService.instance.database;
         List<Map<String, dynamic>> existing;
         if (taskId != null) {
-          existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+          existing =
+              await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
         } else {
-          existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+          existing =
+              await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
         }
         if (existing.isNotEmpty) {
           final matchId = existing.first['id'] as int;
-          await db.update('tasks', {
-            'file_uploaded': 0,
-            'is_submitted': 0,
-            'submission_files': '[]',
-            'submission_status': null,
-            'last_submission_check': DateTime.now().toIso8601String(),
-          }, where: 'id = ?', whereArgs: [matchId]);
+          await db.update(
+              'tasks',
+              {
+                'file_uploaded': 0,
+                'is_submitted': 0,
+                'submission_files': '[]',
+                'submission_status': null,
+                'last_submission_check': DateTime.now().toIso8601String(),
+              },
+              where: 'id = ?',
+              whereArgs: [matchId]);
         }
       }
 
       await Logger.instance.log('REMOVE_SUB: Success=$remoteSuccess');
-      return {
-        'success': remoteSuccess,
-        'message': remoteSuccess
-            ? 'Submission removed successfully.'
-            : 'Could not remove submission on Moodle. It may already be graded. Please try in your browser.',
-      };
+      if (remoteSuccess) {
+        return {
+          'success': true,
+          'message': 'Submission removed successfully.',
+        };
+      } else {
+        return {
+          'success': false,
+          'open_in_browser': true,
+          'url': taskUrl,
+          'message': 'Could not remove submission on Moodle. It may already be graded. Please try in your browser.',
+        };
+      }
     } catch (e) {
       await Logger.instance.log('REMOVE_SUB: Exception: $e');
       try {
         final db = await DatabaseService.instance.database;
         List<Map<String, dynamic>> existing;
         if (taskId != null) {
-          existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+          existing =
+              await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
         } else {
-          existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+          existing =
+              await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
         }
         if (existing.isNotEmpty) {
           final matchId = existing.first['id'] as int;
-          await db.update('tasks', {
-            'file_uploaded': 0,
-            'is_submitted': 0,
-            'submission_files': '[]',
-            'submission_status': null,
-            'last_submission_check': DateTime.now().toIso8601String(),
-          }, where: 'id = ?', whereArgs: [matchId]);
+          await db.update(
+              'tasks',
+              {
+                'file_uploaded': 0,
+                'is_submitted': 0,
+                'submission_files': '[]',
+                'submission_status': null,
+                'last_submission_check': DateTime.now().toIso8601String(),
+              },
+              where: 'id = ?',
+              whereArgs: [matchId]);
         }
       } catch (_) {}
       return {'success': false, 'message': 'Failed to remove submission: $e'};
@@ -1737,7 +2101,12 @@ class MoodleService {
     String quizUrl, {
     String? sessionCookie,
   }) async {
-    return {'success': false, 'open_in_browser': true, 'url': quizUrl, 'message': 'Open the quiz in your browser'};
+    return {
+      'success': false,
+      'open_in_browser': true,
+      'url': quizUrl,
+      'message': 'Open the quiz in your browser'
+    };
   }
 
   Future<Map<String, dynamic>> submitQuizAnswers(
@@ -1748,7 +2117,12 @@ class MoodleService {
     Map<String, String> answers, {
     String? sessionCookie,
   }) async {
-    return {'success': false, 'open_in_browser': true, 'url': quizUrl, 'message': 'Submit the quiz in your browser'};
+    return {
+      'success': false,
+      'open_in_browser': true,
+      'url': quizUrl,
+      'message': 'Submit the quiz in your browser'
+    };
   }
 
   Future<Map<String, dynamic>> checkSubmissionStatus(
@@ -1778,7 +2152,8 @@ class MoodleService {
         return {'success': false, 'message': 'Invalid task URL.'};
       }
 
-      final assignResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
+      final assignResp =
+          await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
       final assignDoc = html_parser.parse(assignResp.body);
 
       bool hasSubmission = false;
@@ -1790,7 +2165,8 @@ class MoodleService {
       // --- Q) Quiz-specific check ---
       if (taskUrl.contains('/mod/quiz/')) {
         try {
-          final gradeEl = assignDoc.querySelector('.graded, .quizgraded, .grade');
+          final gradeEl =
+              assignDoc.querySelector('.graded, .quizgraded, .grade');
           if (gradeEl != null) {
             final g = gradeEl.text.trim();
             if (g.contains('/')) {
@@ -1802,23 +2178,30 @@ class MoodleService {
       }
 
       // --- 1) Detect submission status from status text elements ---
-      final statusEl = assignDoc.querySelector('[class*="submissionstatustext"], [class*="submissionstatus"], [class*="submission_status"], [data-region*="submission-status"]');
+      final statusEl = assignDoc.querySelector(
+          '[class*="submissionstatustext"], [class*="submissionstatus"], [class*="submission_status"], [data-region*="submission-status"]');
       if (statusEl != null) {
         final st = statusEl.text.trim().toLowerCase();
-        if (st.contains('submitted') || st.contains('entregado') || st.contains('graded') || st.contains('calificado') || st.contains('for grading')) {
+        if (st.contains('submitted') ||
+            st.contains('entregado') ||
+            st.contains('graded') ||
+            st.contains('calificado') ||
+            st.contains('for grading')) {
           hasSubmission = true;
           submissionStatus = statusEl.text.trim();
         }
       }
 
       // --- 2) Check for "Edit submission" button (proves there IS a submission) ---
-      final editBtns = assignDoc.querySelectorAll('input[value="Edit submission"], a[href*="action=editsubmission"]');
+      final editBtns = assignDoc.querySelectorAll(
+          'input[value="Edit submission"], a[href*="action=editsubmission"]');
       for (final btn in editBtns) {
         final btnText = btn.text.trim().toLowerCase();
         final btnVal = btn.attributes['value']?.toLowerCase() ?? '';
-        if (btnText.contains('edit submission') || btnVal.contains('edit submission')) {
+        if (btnText.contains('edit submission') ||
+            btnVal.contains('edit submission')) {
           hasSubmission = true;
-          if (submissionStatus == null) submissionStatus = 'Submitted';
+          submissionStatus ??= 'Submitted';
           break;
         }
       }
@@ -1854,7 +2237,8 @@ class MoodleService {
       for (final sel in submissionRegionSelectors) {
         final elements = assignDoc.querySelectorAll(sel);
         for (final el in elements) {
-          final links = el.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
+          final links = el.querySelectorAll(
+              'a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
           for (final link in links) {
             final href = link.attributes['href'];
             if (href == null) continue;
@@ -1864,10 +2248,13 @@ class MoodleService {
 
             String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
 
-            if (filename.isEmpty || filename == 'Download' || filename == 'download') {
+            if (filename.isEmpty ||
+                filename == 'Download' ||
+                filename == 'download') {
               final parent = link.parent;
               if (parent != null) {
-                final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+                final siblingText =
+                    parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
                 if (siblingText.length > 1 && siblingText.length < 200) {
                   filename = siblingText;
                 }
@@ -1876,7 +2263,9 @@ class MoodleService {
 
             if (filename.isEmpty || filename.length > 200) {
               final segments = href.split('/');
-              filename = Uri.decodeComponent(segments.lastWhere((s) => s.contains('.'), orElse: () => segments.last));
+              filename = Uri.decodeComponent(segments.lastWhere(
+                  (s) => s.contains('.'),
+                  orElse: () => segments.last));
             }
 
             final resolved = _resolveUrl(href);
@@ -1896,13 +2285,20 @@ class MoodleService {
       bool hasOnlineText = false;
       String? onlineTextContent;
       // Only check elements that are specifically the text submission, not generic page content
-      for (final sel in ['.online_text', '.onlinetext', '.submission_onlinetext', '[data-region*="submission-content"] .no-overflow']) {
+      for (final sel in [
+        '.online_text',
+        '.onlinetext',
+        '.submission_onlinetext',
+        '[data-region*="submission-content"] .no-overflow'
+      ]) {
         final el = assignDoc.querySelector(sel);
         if (el != null) {
           final text = el.text.trim();
           // Online text submissions are typically longer than 50 chars
           // and are found within the submission area, not the description area
-          if (text.isNotEmpty && text.length > 50 && !text.startsWith('Description')) {
+          if (text.isNotEmpty &&
+              text.length > 50 &&
+              !text.startsWith('Description')) {
             hasOnlineText = true;
             onlineTextContent = text;
             break;
@@ -1914,7 +2310,8 @@ class MoodleService {
         submissionFiles.add({
           'filename': 'online_text_submission',
           'type': 'online_text',
-          'preview': onlineTextContent!.substring(0, onlineTextContent.length.clamp(0, 200)),
+          'preview': onlineTextContent!
+              .substring(0, onlineTextContent.length.clamp(0, 200)),
           'checked_at': DateTime.now().toIso8601String(),
         });
       }
@@ -1923,9 +2320,11 @@ class MoodleService {
       final db = await DatabaseService.instance.database;
       List<Map<String, dynamic>> existing;
       if (taskId != null) {
-        existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+        existing =
+            await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
       } else {
-        existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+        existing =
+            await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
       }
       if (existing.isNotEmpty) {
         final matchId = existing.first['id'] as int;
@@ -1950,7 +2349,8 @@ class MoodleService {
         if (quizGrade != null) updates['quiz_grade'] = quizGrade;
         if (quizFeedback != null) updates['quiz_feedback'] = quizFeedback;
 
-        await db.update('tasks', updates, where: 'id = ?', whereArgs: [matchId]);
+        await db
+            .update('tasks', updates, where: 'id = ?', whereArgs: [matchId]);
       }
 
       return {
@@ -1987,15 +2387,17 @@ class MoodleService {
   }) async {
     final client = _createClient();
     final resources = <Map<String, dynamic>>[];
-    
+
     try {
-      await Logger.instance.log('COURSE_CONTENT: Starting scrape for course: $courseName');
-      
+      await Logger.instance
+          .log('COURSE_CONTENT: Starting scrape for course: $courseName');
+
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
         try {
           await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
         } catch (_) {
-          await Logger.instance.log('COURSE_CONTENT: Saved session expired, logging in fresh');
+          await Logger.instance
+              .log('COURSE_CONTENT: Saved session expired, logging in fresh');
           _cookies.clear();
           await _login(moodleUrl, username, password);
         }
@@ -2004,15 +2406,19 @@ class MoodleService {
       }
 
       // Navigate to course page
-      final courseUrl = '$_baseUrl/course/view.php?name=${Uri.encodeComponent(courseName)}';
-      await Logger.instance.log('COURSE_CONTENT: Fetching course page: $courseUrl');
-      
+      final courseUrl =
+          '$_baseUrl/course/view.php?name=${Uri.encodeComponent(courseName)}';
+      await Logger.instance
+          .log('COURSE_CONTENT: Fetching course page: $courseUrl');
+
       final courseResp = await _get(client, courseUrl);
       final courseDoc = html_parser.parse(courseResp.body);
 
       // Find all activity/resource links
-      final activityLinks = courseDoc.querySelectorAll('.activity, .resource, .modtype_label, [class*="activity"]');
-      await Logger.instance.log('COURSE_CONTENT: Found ${activityLinks.length} activities/resources');
+      final activityLinks = courseDoc.querySelectorAll(
+          '.activity, .resource, .modtype_label, [class*="activity"]');
+      await Logger.instance.log(
+          'COURSE_CONTENT: Found ${activityLinks.length} activities/resources');
 
       for (final activity in activityLinks) {
         try {
@@ -2027,7 +2433,7 @@ class MoodleService {
 
           // Determine resource type and extract relevant info
           Map<String, dynamic>? resource;
-          
+
           if (activityType == 'pdf') {
             resource = {
               'type': 'pdf',
@@ -2061,14 +2467,17 @@ class MoodleService {
 
           if (resource != null) {
             resources.add(resource);
-            await Logger.instance.log('COURSE_CONTENT: Found ${resource['type']}: ${resource['title']}');
+            await Logger.instance.log(
+                'COURSE_CONTENT: Found ${resource['type']}: ${resource['title']}');
           }
         } catch (e) {
-          await Logger.instance.log('COURSE_CONTENT: Error parsing activity: $e');
+          await Logger.instance
+              .log('COURSE_CONTENT: Error parsing activity: $e');
         }
       }
 
-      await Logger.instance.log('COURSE_CONTENT: Total resources found: ${resources.length}');
+      await Logger.instance
+          .log('COURSE_CONTENT: Total resources found: ${resources.length}');
       return resources;
     } catch (e) {
       await Logger.instance.log('COURSE_CONTENT: Exception: $e');
@@ -2084,7 +2493,7 @@ class MoodleService {
     final classes = (element.attributes['class'] ?? '').toLowerCase();
 
     // PDF detection
-    if (hrefLower.contains('.pdf') || 
+    if (hrefLower.contains('.pdf') ||
         hrefLower.contains('/mod/resource/') ||
         textLower.contains('pdf') ||
         classes.contains('pdf')) {
@@ -2092,7 +2501,7 @@ class MoodleService {
     }
 
     // Video detection
-    if (hrefLower.contains('video') || 
+    if (hrefLower.contains('video') ||
         hrefLower.contains('youtube') ||
         hrefLower.contains('vimeo') ||
         textLower.contains('video') ||
