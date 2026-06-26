@@ -21,7 +21,7 @@ class CalendarViewScreen extends StatefulWidget {
 class _CalendarViewScreenState extends State<CalendarViewScreen> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
+  DateTime? _selectedDay = DateTime.now();
 
   Map<DateTime, List<Task>> _getEventsForMonth() {
     Map<DateTime, List<Task>> events = {};
@@ -157,33 +157,6 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                         );
                       }).toList(),
                     ),
-                  ),
-                );
-              },
-              defaultBuilder: (context, day, _) {
-                final tasks = _getTasksForDay(day);
-                if (tasks.isEmpty) return null;
-                
-                return Container(
-                  margin: const EdgeInsets.all(4),
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Column(
-                    children: tasks.take(2).map((task) {
-                      return Text(
-                        task.title.length > 15 
-                            ? '${task.title.substring(0, 15)}...' 
-                            : task.title,
-                        style: TextStyle(
-                          fontSize: 8,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      );
-                    }).toList(),
                   ),
                 );
               },

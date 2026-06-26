@@ -546,7 +546,7 @@ class MoodleService {
           }
 
           final courseEl = event.querySelector('a[href*="/course/view.php"], .course a, .event-course a');
-          final courseName = courseEl?.text.trim() ?? 'ITLA';
+          final courseName = courseEl?.text.trim() ?? 'Unknown Course';
           final courseUrl = courseEl?.attributes['href'] ?? '';
 
           final urlEl = event.querySelector('a[href*="/mod/"], a.card-link, .card-footer a');
@@ -835,8 +835,8 @@ class MoodleService {
       }
 
       if (itemid == null) {
-        itemid = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-        await Logger.instance.log('UPLOAD: Using generated itemid: $itemid');
+        itemid = 0;
+        await Logger.instance.log('UPLOAD: Using default itemid=0 for new draft area');
       }
 
       // Step 2: Discover upload repository ID
@@ -1412,8 +1412,8 @@ class MoodleService {
               ];
         await db.update('tasks',
           {
-            'file_uploaded': hasSubmission ? 1 : 1,
-            'is_submitted': hasSubmission ? 1 : 1,
+            'file_uploaded': hasSubmission ? 1 : 0,
+            'is_submitted': hasSubmission ? 1 : 0,
             'submission_files': jsonEncode(submissionFiles),
             'submission_status': submissionStatus ?? 'Submitted via app',
             'last_submission_check': DateTime.now().toIso8601String(),

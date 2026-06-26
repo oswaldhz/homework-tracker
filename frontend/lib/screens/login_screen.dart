@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../services/logger_service.dart';
 import '../services/moodle_service.dart';
 import 'dashboard_screen.dart';
@@ -127,6 +128,16 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } catch (prefsErr) {
         await Logger.instance.log('LOAD_CRED: SharedPreferences error: $prefsErr');
+      }
+
+      // Decrypt display names for the dropdown
+      for (final cred in savedCredentials) {
+        try {
+          final ctx = context;
+          cred['_displayName'] = await ctx.read<ApiService>().decryptUsername(cred['encrypted_username'] as String);
+        } catch (_) {
+          cred['_displayName'] = cred['encrypted_username'] as String;
+        }
       }
 
       bool shouldAutoLogin = false;
@@ -420,11 +431,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             items: _savedCredentials.map((cred) {
                               final url = cred['moodle_url'] as String;
-                              final username = cred['encrypted_username'] as String;
+                              final displayUser = cred['_displayName'] as String? ?? cred['encrypted_username'] as String;
                               return DropdownMenuItem<String>(
                                 value: cred['id'].toString(),
                                 child: Text(
-                                  '$username @ $url',
+                                  '$displayUser @ $url',
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               );

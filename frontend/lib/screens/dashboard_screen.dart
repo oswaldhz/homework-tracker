@@ -66,12 +66,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   void _navigateToTaskDetail(Task task) {
+    final api = context.read<ApiService>();
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => TaskDetailScreen(
           task: task,
-          onToggleComplete: () {},
+          onToggleComplete: () async {
+            await api.toggleComplete(task.id);
+          },
         ),
       ),
     );

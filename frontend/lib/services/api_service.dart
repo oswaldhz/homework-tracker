@@ -26,7 +26,6 @@ class ApiService extends ChangeNotifier {
 
   Future<bool> hasCredentials() async {
     try {
-      // Check database first (persists across sessions on Windows)
       var cred = await DatabaseService.instance.getCredentials();
       if (cred != null) {
         try {
@@ -34,21 +33,11 @@ class ApiService extends ChangeNotifier {
           await AuthService.instance.decrypt(cred['encrypted_password'] as String);
           return true;
         } catch (_) {
-          // Old key — credential is stale, remove it
           await DatabaseService.instance.clearAllCredentials();
-          cred = null;
         }
       }
-
-      // Fallback to SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      if (!prefs.containsKey('moodle_url')) return cred != null;
-      if (cred == null) {
-        // DB had no credential but prefs says we're logged in
-        final dbCred = await DatabaseService.instance.getCredentials();
-        return dbCred != null;
-      }
-      return true;
+      return prefs.containsKey('moodle_url');
     } catch (_) {
       return false;
     }
@@ -102,8 +91,6 @@ class ApiService extends ChangeNotifier {
       if (result['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('moodle_url', moodleUrl);
-        await prefs.setString('username', username);
-        await prefs.setString('password', sessionCookie ?? password);
         await prefs.setString('login_type', loginType);
         await prefs.setBool('remember_me', true);
         if (sessionCookie != null) {

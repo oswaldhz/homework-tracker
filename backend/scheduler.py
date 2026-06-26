@@ -3,6 +3,10 @@ from datetime import datetime, timedelta
 from models import SessionLocal, Task, Credential
 from auth import decrypt_value
 from scraper import scrape_moodle_assignments
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('scheduler')
 
 scheduler = BackgroundScheduler()
 
@@ -21,7 +25,7 @@ def scheduled_scrape():
         
         check_due_soon_tasks(db)
     except Exception as e:
-        print(f"Scheduled scrape error: {e}")
+        logger.error(f"Scheduled scrape error: {e}")
     finally:
         db.close()
 
@@ -35,7 +39,7 @@ def check_due_soon_tasks(db):
     ).all()
     
     for task in due_soon:
-        print(f"NOTIFICATION: '{task.title}' is due soon ({task.due_date})")
+        logger.info(f"Task '{task.title}' is due soon ({task.due_date})")
 
 def start_scheduler():
     scheduler.add_job(scheduled_scrape, 'interval', minutes=30, id='moodle_scrape')

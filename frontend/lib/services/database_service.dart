@@ -136,23 +136,15 @@ class DatabaseService {
       whereArgs.addAll([startDt.toIso8601String(), endDt.toIso8601String()]);
     }
 
-    final tasks = await db.query(
-      'tasks',
-      where: where,
-      whereArgs: whereArgs,
-      orderBy: 'due_date ASC',
-    );
+    final tasks = await db.rawQuery('''
+      SELECT t.*, COALESCE(c.name, 'Unknown') as course_name
+      FROM tasks t
+      LEFT JOIN courses c ON t.course_id = c.id
+      WHERE $where
+      ORDER BY t.due_date ASC
+    ''', whereArgs);
 
-    final result = <Map<String, dynamic>>[];
-    for (final task in tasks) {
-      final course = await db.query('courses', where: 'id = ?', whereArgs: [task['course_id']]);
-      result.add({
-        ...task,
-        'course_name': course.isNotEmpty ? course.first['name'] : 'Unknown',
-      });
-    }
-
-    return result;
+    return tasks.map((t) => Map<String, dynamic>.from(t)).toList();
   }
 
   Future<Map<String, int>> getStats() async {

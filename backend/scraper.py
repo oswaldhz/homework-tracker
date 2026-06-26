@@ -4,6 +4,7 @@ from models import SessionLocal, Course, Task
 import re
 import json
 import os
+import hashlib
 from pathlib import Path
 from config import BROWSER_DATA_DIR
 
@@ -757,7 +758,6 @@ def save_assignments(db, assignments, moodle_url):
         # Build a stable, unique moodle_id from the title + URL to avoid collisions
         # between tasks whose titles share the same first 50 characters.
         url_suffix = assignment.get('url', '') or ''
-        import hashlib
         url_hash = hashlib.md5(url_suffix.encode()).hexdigest()[:8]
         title_slug = re.sub(r'[^\w]', '_', assignment['title'][:40])
         moodle_id = f"{title_slug}_{url_hash}"
@@ -768,8 +768,9 @@ def save_assignments(db, assignments, moodle_url):
             if course_url and not course_url.startswith('http'):
                 course_url = f"{moodle_url.rstrip('/')}/{course_url.lstrip('/')}"
 
+            course_url_hash = hashlib.md5(course_url.encode()).hexdigest()[:8] if course_url else hashlib.md5(assignment['course_name'].encode()).hexdigest()[:8]
             course = Course(
-                moodle_id=f"course_{assignment['course_name'][:30]}",
+                moodle_id=f"course_{assignment['course_name'][:30]}_{course_url_hash}",
                 name=assignment['course_name'],
                 short_name=assignment['course_name'][:10],
                 url=course_url

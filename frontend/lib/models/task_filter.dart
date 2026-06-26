@@ -1,3 +1,7 @@
+class _Sentinel {
+  const _Sentinel();
+}
+
 class TaskFilter {
   final String? courseId;
   final String? status;
@@ -11,17 +15,19 @@ class TaskFilter {
     this.endDate,
   });
 
+  static const _sentinel = _Sentinel();
+
   TaskFilter copyWith({
-    String? courseId,
-    String? status,
-    DateTime? startDate,
-    DateTime? endDate,
+    Object? courseId = _sentinel,
+    Object? status = _sentinel,
+    Object? startDate = _sentinel,
+    Object? endDate = _sentinel,
   }) {
     return TaskFilter(
-      courseId: courseId ?? this.courseId,
-      status: status ?? this.status,
-      startDate: startDate ?? this.startDate,
-      endDate: endDate ?? this.endDate,
+      courseId: courseId is _Sentinel ? this.courseId : courseId as String?,
+      status: status is _Sentinel ? this.status : status as String?,
+      startDate: startDate is _Sentinel ? this.startDate : startDate as DateTime?,
+      endDate: endDate is _Sentinel ? this.endDate : endDate as DateTime?,
     );
   }
 
