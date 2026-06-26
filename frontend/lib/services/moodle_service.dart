@@ -1083,25 +1083,112 @@ class MoodleService {
 
       // Step 3: Submit the assignment with the uploaded file reference
       await Logger.instance.log('UPLOAD: Submitting assignment with savesubmission');
+
+      // Extract all form fields from the edit form to submit them back (browser-like)
+      final formFields = <String, String>{
+        'sesskey': sesskey,
+        '_qf__mod_assign_submission_form': '1',
+        'files_filemanager': finalItemid.toString(),
+      };
+      final editForm = editDoc.querySelector('form[action*="savesubmission"], form[action*="editsubmission"]');
+      if (editForm != null) {
+        for (final input in editForm.querySelectorAll('input[type="hidden"], input[type="checkbox"], input[type="text"], input[type="submit"]')) {
+          final name = input.attributes['name'];
+          final value = input.attributes['value'] ?? '';
+          if (name != null && name.isNotEmpty && name != 'sesskey' && name != '_qf__mod_assign_submission_form' && name != 'files_filemanager') {
+            if (input.attributes['type'] == 'checkbox') {
+              if (input.attributes['checked'] != null) {
+                formFields[name] = value;
+              }
+            } else {
+              formFields[name] = value;
+            }
+          }
+        }
+        // Also extract textareas
+        for (final textarea in editForm.querySelectorAll('textarea')) {
+          final name = textarea.attributes['name'];
+          if (name != null && name.isNotEmpty) {
+            formFields[name] = textarea.text.trim();
+          }
+        }
+      }
+
+      // Add submitbutton - try to find the actual submit button text
+      final submitBtn = editDoc.querySelector('input[type="submit"][name="submitbutton"], input[type="submit"][name="submit"], button[type="submit"]');
+      if (submitBtn != null) {
+        final name = submitBtn.attributes['name'] ?? 'submitbutton';
+        final value = submitBtn.attributes['value'] ?? submitBtn.text.trim();
+        if (name.isNotEmpty && value.isNotEmpty) {
+          formFields[name] = value;
+        }
+      } else {
+        formFields['submitbutton'] = 'Save changes';
+      }
+
       final submitResp = await client.post(
         Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid&action=savesubmission'),
         headers: _headers(),
-        body: {
-          'sesskey': sesskey,
-          '_qf__mod_assign_submission_form': '1',
-          'files_filemanager': finalItemid.toString(),
-          'submitbutton': 'Save changes',
-        },
+        body: formFields,
       ).timeout(_requestTimeout);
       
       await Logger.instance.log('UPLOAD: Savesubmission response status: ${submitResp.statusCode}');
       await Logger.instance.log('UPLOAD: Savesubmission response length: ${submitResp.body.length}');
+
+      // Check if the savesubmission actually succeeded on Moodle's side
+      final submitBody = submitResp.body;
+      bool submitConfirmed = false;
+      String? submitError;
+
+      if (submitBody.contains('Your submission has been saved') ||
+          submitBody.contains('Su entrega ha sido guardada') ||
+          submitBody.contains('class="notifysuccess"')) {
+        submitConfirmed = true;
+      }
+
+      // Check for Moodle error messages
+      final errorPatterns = [
+        RegExp(r'class="error"[^>]*>[^<]*submission[^<]*<', caseSensitive: false),
+        RegExp(r'class="notifyproblem"[^>]*>[^<]*<', caseSensitive: false),
+        RegExp(r'<div[^>]*role="alert"[^>]*>[^<]*submission[^<]*<', caseSensitive: false),
+      ];
+      for (final p in errorPatterns) {
+        final match = p.firstMatch(submitBody);
+        if (match != null) {
+          submitError = 'Moodle submission form returned an error. Please try in your browser.';
+          await Logger.instance.log('UPLOAD: savesubmission error match: ${match.group(0)}');
+          break;
+        }
+      }
+
+      if (!submitConfirmed && submitError == null) {
+        // Check if we're being redirected back to the assignment page instead
+        // If we see the edit submission form again, it means saving failed
+        if (submitBody.contains('action=editsubmission') || submitBody.contains('files_filemanager')) {
+          submitError = 'Submission form was rejected by Moodle. Possible missing fields or session expired.';
+        }
+      }
+
+      if (submitError != null) {
+        await Logger.instance.log('UPLOAD: savesubmission failed: $submitError');
+        return {
+          'success': false,
+          'open_in_browser': true,
+          'url': taskUrl,
+          'message': submitError,
+        };
+      }
 
       // Step 4: Verify submission by checking the assignment page
       await Future.delayed(const Duration(milliseconds: 500));
       await Logger.instance.log('UPLOAD: Verifying submission');
       final verifyResp = await _get(client, '$_baseUrl/mod/assign/view.php?id=$cmid');
       final verifyDoc = html_parser.parse(verifyResp.body);
+
+      // Check for "Your submission has been saved" confirmation
+      final submissionSaved = verifyResp.body.contains('Your submission has been saved') ||
+          verifyResp.body.contains('Su entrega ha sido guardada') ||
+          verifyResp.body.contains('class="notifysuccess"');
 
       // Check for submission status indicators
       bool hasSubmission = false;
@@ -1118,95 +1205,55 @@ class MoodleService {
         }
       }
 
-      // Find submitted files: scan submission regions first, avoid description files
+      // Find submitted files: scan submission regions only, no fallback
       final uploadSeenUrls = <String>{};
-
-      // First pass: look in submission-specific regions
-      final uploadSubRegions = verifyDoc.querySelectorAll('[data-region*="submission-content"], [data-region*="submission-received"], [data-region*="submissions"], .submission-received-files, .submissionplugins, .fileuploadsubmission, ul.submission-files');
-      for (final region in uploadSubRegions) {
-        final links = region.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
-        for (final link in links) {
-          final href = link.attributes['href'];
-          if (href == null) continue;
-          String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-          if (filename.isEmpty || filename == 'Download' || filename == 'download') {
-            final parent = link.parent;
-            if (parent != null) {
-              final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-              if (siblingText.length > 1 && siblingText.length < 200) filename = siblingText;
+      final uploadSubRegionSelectors = [
+        '[data-region="submission-content"]',
+        '[data-region="submission-received"]',
+        '[data-region="submissions"]',
+        '.submission-received-files',
+        '.submissionplugins',
+        '.fileuploadsubmission',
+        'ul.submission-files',
+        '.submissionstatustext',
+        '[id*="submission"] .files',
+        '.assignsubmission',
+      ];
+      for (final sel in uploadSubRegionSelectors) {
+        final elements = verifyDoc.querySelectorAll(sel);
+        for (final el in elements) {
+          final links = el.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
+          for (final link in links) {
+            final href = link.attributes['href'];
+            if (href == null) continue;
+            String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+            if (filename.isEmpty || filename == 'Download' || filename == 'download') {
+              final parent = link.parent;
+              if (parent != null) {
+                final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+                if (siblingText.length > 1 && siblingText.length < 200) filename = siblingText;
+              }
             }
-          }
-          if (filename.isEmpty || filename.length > 200) {
-            filename = Uri.decodeComponent(href.split('/').lastWhere((s) => s.contains('.'), orElse: () => href.split('/').last));
-          }
-          final resolved = _resolveUrl(href);
-          if (resolved.isNotEmpty && uploadSeenUrls.add(resolved)) {
-            hasSubmission = true;
-            if (submittedFileName == null) submittedFileName = filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-            submissionFilesWithUrls.add({
-              'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
-              'url': resolved,
-              'size': await File(filePath).length(),
-              'uploaded_at': DateTime.now().toIso8601String(),
-              'itemid': finalItemid,
-            });
+            if (filename.isEmpty || filename.length > 200) {
+              filename = Uri.decodeComponent(href.split('/').lastWhere((s) => s.contains('.'), orElse: () => href.split('/').last));
+            }
+            final resolved = _resolveUrl(href);
+            if (resolved.isNotEmpty && uploadSeenUrls.add(resolved)) {
+              hasSubmission = true;
+              if (submittedFileName == null) submittedFileName = filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+              submissionFilesWithUrls.add({
+                'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+                'url': resolved,
+                'size': await File(filePath).length(),
+                'uploaded_at': DateTime.now().toIso8601String(),
+                'itemid': finalItemid,
+              });
+            }
           }
         }
       }
 
-      // Second pass: scan the rest of the page but skip the intro/description area
-      if (submissionFilesWithUrls.isEmpty) {
-        final introAnchors = <String>{};
-        for (final introEl in verifyDoc.querySelectorAll('#intro, [data-region*="activity-info"], [data-region*="activity-header"], .activity-description, .no-overflow')) {
-          introAnchors.add(introEl.outerHtml ?? '');
-        }
-
-        final allLinks = verifyDoc.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
-        for (final link in allLinks) {
-          final href = link.attributes['href'];
-          if (href == null) continue;
-          final resolved = _resolveUrl(href);
-          if (resolved.isEmpty || !uploadSeenUrls.add(resolved)) continue;
-
-          final linkHtml = link.outerHtml ?? '';
-          if (linkHtml.isNotEmpty && introAnchors.any((a) => a.contains(linkHtml))) continue;
-
-          var parent = link.parent;
-          bool isInIntro = false;
-          while (parent != null) {
-            final classAttr = parent.attributes['class'] ?? '';
-            if (parent.id == 'intro' ||
-                parent.attributes['data-region'] == 'activity-info' ||
-                parent.attributes['data-region'] == 'activity-header' ||
-                classAttr.contains('no-overflow') ||
-                classAttr.contains('activity-description')) {
-              isInIntro = true;
-              break;
-            }
-            parent = parent.parent;
-          }
-          if (isInIntro) continue;
-
-          String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-          if (filename.isEmpty || filename.length > 200) {
-            filename = Uri.decodeComponent(href.split('/').lastWhere((s) => s.contains('.'), orElse: () => href.split('/').last));
-          }
-          hasSubmission = true;
-          if (submittedFileName == null) submittedFileName = filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-          submissionFilesWithUrls.add({
-            'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
-            'url': resolved,
-            'size': await File(filePath).length(),
-            'uploaded_at': DateTime.now().toIso8601String(),
-            'itemid': finalItemid,
-          });
-        }
-        if (submissionFilesWithUrls.isEmpty && hasSubmission) {
-          await Logger.instance.log('UPLOAD VERIFY DEBUG: No files found. HTML: ${verifyResp.body.substring(0, verifyResp.body.length.clamp(0, 3000))}');
-        }
-      }
-
-      await Logger.instance.log('UPLOAD: Verification result - hasSubmission: $hasSubmission, status: $submissionStatus, files: ${submissionFilesWithUrls.length}');
+      await Logger.instance.log('UPLOAD: Verification result - hasSubmission: $hasSubmission, status: $submissionStatus, files: ${submissionFilesWithUrls.length}, submissionSaved: $submissionSaved');
 
       // Update local DB with submission info
       final db = await DatabaseService.instance.database;
@@ -1446,94 +1493,54 @@ class MoodleService {
       // --- 3) Find submission files ONLY within submission-specific regions ---
       final seenUrls = <String>{};
 
-      // First pass: look for files inside submission regions only
-      final subRegions = assignDoc.querySelectorAll('[data-region*="submission-content"], [data-region*="submission-received"], [data-region*="submissions"], .submission-received-files, .submissionplugins, .fileuploadsubmission, ul.submission-files');
-      for (final region in subRegions) {
-        final links = region.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
-        for (final link in links) {
-          final href = link.attributes['href'];
-          if (href == null) continue;
+      // Scan all HTML elements whose data-region attribute suggests a submission file area
+      final subRegionSelectors = [
+        '[data-region="submission-content"]',
+        '[data-region="submission-received"]',
+        '[data-region="submissions"]',
+        '.submission-received-files',
+        '.submissionplugins',
+        '.fileuploadsubmission',
+        'ul.submission-files',
+        '.submissionstatustext',      // often contains the file list
+        '[id*="submission"] .files',   // generic: any #submission* element containing files
+        '.assignsubmission',           // submission plugin containers
+      ];
+      for (final sel in subRegionSelectors) {
+        final elements = assignDoc.querySelectorAll(sel);
+        for (final el in elements) {
+          final links = el.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
+          for (final link in links) {
+            final href = link.attributes['href'];
+            if (href == null) continue;
 
-          String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+            String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
 
-          if (filename.isEmpty || filename == 'Download' || filename == 'download') {
-            final parent = link.parent;
-            if (parent != null) {
-              final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-              if (siblingText.length > 1 && siblingText.length < 200) {
-                filename = siblingText;
+            if (filename.isEmpty || filename == 'Download' || filename == 'download') {
+              final parent = link.parent;
+              if (parent != null) {
+                final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+                if (siblingText.length > 1 && siblingText.length < 200) {
+                  filename = siblingText;
+                }
               }
             }
-          }
 
-          if (filename.isEmpty || filename.length > 200) {
-            final segments = href.split('/');
-            filename = Uri.decodeComponent(segments.lastWhere((s) => s.contains('.'), orElse: () => segments.last));
-          }
-
-          final resolved = _resolveUrl(href);
-          if (resolved.isNotEmpty && seenUrls.add(resolved)) {
-            hasSubmission = true;
-            submissionFiles.add({
-              'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
-              'url': resolved,
-              'checked_at': DateTime.now().toIso8601String(),
-            });
-          }
-        }
-      }
-
-      // Second pass: if nothing found yet, scan all pluginfile links but skip the intro/description area
-      if (submissionFiles.isEmpty) {
-        // Identify description anchor elements
-        final introAnchors = <String>{};
-        for (final introEl in assignDoc.querySelectorAll('#intro, [data-region*="activity-info"], [data-region*="activity-header"], .activity-description, .no-overflow')) {
-          introAnchors.add(introEl.outerHtml ?? '');
-        }
-
-        final allLinks = assignDoc.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
-        for (final link in allLinks) {
-          final href = link.attributes['href'];
-          if (href == null) continue;
-          final resolved = _resolveUrl(href);
-          if (resolved.isEmpty || !seenUrls.add(resolved)) continue;
-
-          // Skip links whose HTML is contained within any description anchor
-          final linkHtml = link.outerHtml ?? '';
-          if (linkHtml.isNotEmpty && introAnchors.any((a) => a.contains(linkHtml))) continue;
-
-          // Also skip if any ancestor is a known intro container
-          var parent = link.parent;
-          bool isInIntro = false;
-          while (parent != null) {
-            final classAttr = parent.attributes['class'] ?? '';
-            if (parent.id == 'intro' ||
-                parent.attributes['data-region'] == 'activity-info' ||
-                parent.attributes['data-region'] == 'activity-header' ||
-                classAttr.contains('no-overflow') ||
-                classAttr.contains('activity-description')) {
-              isInIntro = true;
-              break;
+            if (filename.isEmpty || filename.length > 200) {
+              final segments = href.split('/');
+              filename = Uri.decodeComponent(segments.lastWhere((s) => s.contains('.'), orElse: () => segments.last));
             }
-            parent = parent.parent;
-          }
-          if (isInIntro) continue;
 
-          String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-          if (filename.isEmpty || filename.length > 200) {
-            final segments = href.split('/');
-            filename = Uri.decodeComponent(segments.lastWhere((s) => s.contains('.'), orElse: () => segments.last));
+            final resolved = _resolveUrl(href);
+            if (resolved.isNotEmpty && seenUrls.add(resolved)) {
+              hasSubmission = true;
+              submissionFiles.add({
+                'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+                'url': resolved,
+                'checked_at': DateTime.now().toIso8601String(),
+              });
+            }
           }
-
-          hasSubmission = true;
-          submissionFiles.add({
-            'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
-            'url': resolved,
-            'checked_at': DateTime.now().toIso8601String(),
-          });
-        }
-        if (submissionFiles.isEmpty && hasSubmission) {
-          await Logger.instance.log('SYNC DEBUG: No files found on assignment page. HTML snippet: ${assignResp.body.substring(0, assignResp.body.length.clamp(0, 3000))}');
         }
       }
 
