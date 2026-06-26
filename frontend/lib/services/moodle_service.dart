@@ -13,6 +13,7 @@ class MoodleService {
   MoodleService._();
 
   final Map<String, String> _cookies = {};
+  String? get currentSessionCookie => _cookies['MoodleSession'];
   String _baseUrl = '';
 
   // Network configuration
@@ -407,11 +408,10 @@ class MoodleService {
 
     // Verify the cookie works by fetching the dashboard/homepage
     final resp = await _get(client, '$_baseUrl/my/');
-    final body = resp.body.toLowerCase();
     final url = resp.request?.url.toString() ?? '';
 
     // If we got redirected back to login, the cookie is invalid
-    if (url.contains('/login/') || body.contains('login/index.php') || body.contains('id="username"')) {
+    if (url.contains('/login/')) {
       throw Exception('The session cookie is invalid or has expired. Please log in again.');
     }
 
@@ -502,7 +502,13 @@ class MoodleService {
     final client = _createClient();
     try {
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
-        await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        try {
+          await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        } catch (_) {
+          await Logger.instance.log('SCRAPE: Saved session expired, logging in fresh');
+          _cookies.clear();
+          await _login(moodleUrl, username, password);
+        }
       } else {
         await _login(moodleUrl, username, password);
       }
@@ -591,7 +597,13 @@ class MoodleService {
       await Logger.instance.log('TOGGLE: Starting toggleCompletion for $taskUrl, complete=$complete');
 
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
-        await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        try {
+          await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        } catch (_) {
+          await Logger.instance.log('TOGGLE: Saved session expired, logging in fresh');
+          _cookies.clear();
+          await _login(moodleUrl, username, password);
+        }
       } else {
         await _login(moodleUrl, username, password);
       }
@@ -741,7 +753,13 @@ class MoodleService {
       await Logger.instance.log('UPLOAD: Starting upload for $taskUrl');
       
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
-        await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        try {
+          await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        } catch (_) {
+          await Logger.instance.log('UPLOAD: Saved session expired, logging in fresh');
+          _cookies.clear();
+          await _login(moodleUrl, username, password);
+        }
       } else {
         await _login(moodleUrl, username, password);
       }
@@ -1105,8 +1123,10 @@ class MoodleService {
       }
 
       {
-        // Only target the Moodle assignment submission form by its unique ID
-        final form = editDoc.querySelector('form#mod_assign_submission_form');
+        // Try multiple selectors to find the submission form (ID varies by Moodle version)
+        var form = editDoc.querySelector('form#mod_assign_submission_form');
+        if (form == null) form = editDoc.querySelector('form.mform');
+        if (form == null) form = editDoc.querySelector('form[action*="view.php"]');
         if (form != null) {
           final action = form.attributes['action'] ?? '';
           if (action.isNotEmpty) {
@@ -1219,7 +1239,10 @@ class MoodleService {
             body.contains('Su env') ||
             body.contains('Tu env') ||
             body.contains('class="notifysuccess"') ||
-            body.contains('alert-success')) {
+            body.contains('alert-success') ||
+            body.contains('submissionstatussubmitted') ||
+            body.contains('Enviado para calificar') ||
+            body.contains('Submitted for grading')) {
           return null;
         }
 
@@ -1229,7 +1252,7 @@ class MoodleService {
         }
 
         if (body.contains('class="notifyproblem"') ||
-            body.contains('role="alert"') ||
+            body.contains('class="alert alert-danger"') ||
             body.contains('class="error"')) {
           _saveDebugResponse(body, 'savesubmission_error');
           return 'Moodle rejected the submission. Please try in your browser.';
@@ -1431,7 +1454,13 @@ class MoodleService {
       await Logger.instance.log('REMOVE_SUB: Starting remove submission for $taskUrl');
 
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
-        await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        try {
+          await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        } catch (_) {
+          await Logger.instance.log('REMOVE_SUB: Saved session expired, logging in fresh');
+          _cookies.clear();
+          await _login(moodleUrl, username, password);
+        }
       } else {
         await _login(moodleUrl, username, password);
       }
@@ -1733,7 +1762,12 @@ class MoodleService {
     final client = _createClient();
     try {
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
-        await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        try {
+          await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        } catch (_) {
+          _cookies.clear();
+          await _login(moodleUrl, username, password);
+        }
       } else {
         await _login(moodleUrl, username, password);
       }
@@ -1958,7 +1992,13 @@ class MoodleService {
       await Logger.instance.log('COURSE_CONTENT: Starting scrape for course: $courseName');
       
       if (sessionCookie != null && sessionCookie.isNotEmpty) {
-        await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        try {
+          await _loginWithSessionCookie(client, moodleUrl, sessionCookie);
+        } catch (_) {
+          await Logger.instance.log('COURSE_CONTENT: Saved session expired, logging in fresh');
+          _cookies.clear();
+          await _login(moodleUrl, username, password);
+        }
       } else {
         await _login(moodleUrl, username, password);
       }

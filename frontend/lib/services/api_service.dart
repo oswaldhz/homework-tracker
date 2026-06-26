@@ -435,7 +435,8 @@ class ApiService extends ChangeNotifier {
         return {'success': false, 'open_in_browser': true, 'url': task['url'] ?? '', 'message': e.toString().replaceFirst('Exception: ', '')};
       }
       final loginType = cred['login_type'] as String? ?? 'moodle';
-      final sessionCookie = loginType == 'office365' ? password : null;
+      final prefs = await SharedPreferences.getInstance();
+      String? sessionCookie = loginType == 'office365' ? password : prefs.getString('moodle_session');
 
       final result = await MoodleService.instance.uploadFile(
         cred['moodle_url'],
@@ -448,7 +449,13 @@ class ApiService extends ChangeNotifier {
       );
 
       if (result['success'] == true) {
+        final currentCookie = MoodleService.instance.currentSessionCookie;
+        if (currentCookie != null) {
+          await prefs.setString('moodle_session', currentCookie);
+        }
         await fetchTasks();
+      } else {
+        await prefs.remove('moodle_session');
       }
 
       return result;
