@@ -49,7 +49,9 @@ class Task {
       courseName: json['course_name'] as String,
       dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
       status: json['status'] as String,
-      isCompleted: json['is_completed'] as bool,
+      isCompleted: json['is_completed'] is bool
+          ? json['is_completed'] as bool
+          : (json['is_completed'] as int? ?? 0) == 1,
       fileUploaded: (json['file_uploaded'] as int? ?? 0) == 1,
       isSubmitted: (json['is_submitted'] as int? ?? 0) == 1,
       submissionFiles: files,
