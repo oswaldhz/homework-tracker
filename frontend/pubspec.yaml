@@ -1,7 +1,7 @@
 name: homework_tracker
 description: Moodle homework tracker - cross-platform desktop and mobile app
 publish_to: 'none'
-version: 1.0.4+1
+version: 1.0.5+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

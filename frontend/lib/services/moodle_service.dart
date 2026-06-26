@@ -1084,89 +1084,83 @@ class MoodleService {
       // Step 3: Submit the assignment with the uploaded file reference
       await Logger.instance.log('UPLOAD: Submitting assignment with savesubmission');
 
-      // Extract all form fields from the edit form to submit them back (browser-like)
-      final formFields = <String, String>{
+      // Build form fields: start with known required fields
+      bool hasSubmissionStatement = editResp.body.contains('name="submissionstatement"');
+      bool hasSubmitForGrading = editResp.body.contains('name="submitforgrading"');
+
+      // Find the actual submit button value from the page
+      String submitButtonValue = 'Save changes';
+      final submitBtnEl = editDoc.querySelector('input[type="submit"][name="submitbutton"]');
+      if (submitBtnEl != null) {
+        final val = submitBtnEl.attributes['value'];
+        if (val != null && val.isNotEmpty) submitButtonValue = val;
+      }
+
+      Future<String?> doSaveSubmission(Map<String, String> fields) async {
+        final resp = await client.post(
+          Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid&action=savesubmission'),
+          headers: _headers(),
+          body: fields,
+        ).timeout(_requestTimeout);
+
+        await Logger.instance.log('UPLOAD: Savesubmission response status: ${resp.statusCode}');
+        await Logger.instance.log('UPLOAD: Savesubmission response length: ${resp.body.length}');
+
+        final body = resp.body;
+
+        // Check for success
+        if (body.contains('Your submission has been saved') ||
+            body.contains('Su entrega ha sido guardada') ||
+            body.contains('class="notifysuccess"')) {
+          return null; // success
+        }
+
+        // Check for specific Moodle errors
+        if (body.contains('class="notifyproblem"') ||
+            body.contains('class="error"') ||
+            body.contains('role="alert"')) {
+          return 'Moodle rejected the submission. Please try in your browser.';
+        }
+
+        // Check if we're still on the edit form (submission didn't save)
+        if (body.contains('action=editsubmission') || body.contains('files_filemanager')) {
+          return 'Submission form was rejected by Moodle. Please try in your browser.';
+        }
+
+        return null; // ambiguous result - treat as success
+      }
+
+      // Attempt 1: without submissionstatement (in case it's not required)
+      String? submitError = await doSaveSubmission({
         'sesskey': sesskey,
         '_qf__mod_assign_submission_form': '1',
         'files_filemanager': finalItemid.toString(),
-      };
-      final editForm = editDoc.querySelector('form[action*="savesubmission"], form[action*="editsubmission"]');
-      if (editForm != null) {
-        for (final input in editForm.querySelectorAll('input[type="hidden"], input[type="checkbox"], input[type="text"], input[type="submit"]')) {
-          final name = input.attributes['name'];
-          final value = input.attributes['value'] ?? '';
-          if (name != null && name.isNotEmpty && name != 'sesskey' && name != '_qf__mod_assign_submission_form' && name != 'files_filemanager') {
-            if (input.attributes['type'] == 'checkbox') {
-              if (input.attributes['checked'] != null) {
-                formFields[name] = value;
-              }
-            } else {
-              formFields[name] = value;
-            }
-          }
-        }
-        // Also extract textareas
-        for (final textarea in editForm.querySelectorAll('textarea')) {
-          final name = textarea.attributes['name'];
-          if (name != null && name.isNotEmpty) {
-            formFields[name] = textarea.text.trim();
-          }
-        }
+        'submitbutton': submitButtonValue,
+      });
+
+      // Attempt 2: if failed and submissionstatement exists, retry with it
+      if (submitError != null && hasSubmissionStatement) {
+        await Logger.instance.log('UPLOAD: Retrying savesubmission with submissionstatement');
+        submitError = await doSaveSubmission({
+          'sesskey': sesskey,
+          '_qf__mod_assign_submission_form': '1',
+          'files_filemanager': finalItemid.toString(),
+          'submitbutton': submitButtonValue,
+          'submissionstatement': '1',
+        });
       }
 
-      // Add submitbutton - try to find the actual submit button text
-      final submitBtn = editDoc.querySelector('input[type="submit"][name="submitbutton"], input[type="submit"][name="submit"], button[type="submit"]');
-      if (submitBtn != null) {
-        final name = submitBtn.attributes['name'] ?? 'submitbutton';
-        final value = submitBtn.attributes['value'] ?? submitBtn.text.trim();
-        if (name.isNotEmpty && value.isNotEmpty) {
-          formFields[name] = value;
-        }
-      } else {
-        formFields['submitbutton'] = 'Save changes';
-      }
-
-      final submitResp = await client.post(
-        Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid&action=savesubmission'),
-        headers: _headers(),
-        body: formFields,
-      ).timeout(_requestTimeout);
-      
-      await Logger.instance.log('UPLOAD: Savesubmission response status: ${submitResp.statusCode}');
-      await Logger.instance.log('UPLOAD: Savesubmission response length: ${submitResp.body.length}');
-
-      // Check if the savesubmission actually succeeded on Moodle's side
-      final submitBody = submitResp.body;
-      bool submitConfirmed = false;
-      String? submitError;
-
-      if (submitBody.contains('Your submission has been saved') ||
-          submitBody.contains('Su entrega ha sido guardada') ||
-          submitBody.contains('class="notifysuccess"')) {
-        submitConfirmed = true;
-      }
-
-      // Check for Moodle error messages
-      final errorPatterns = [
-        RegExp(r'class="error"[^>]*>[^<]*submission[^<]*<', caseSensitive: false),
-        RegExp(r'class="notifyproblem"[^>]*>[^<]*<', caseSensitive: false),
-        RegExp(r'<div[^>]*role="alert"[^>]*>[^<]*submission[^<]*<', caseSensitive: false),
-      ];
-      for (final p in errorPatterns) {
-        final match = p.firstMatch(submitBody);
-        if (match != null) {
-          submitError = 'Moodle submission form returned an error. Please try in your browser.';
-          await Logger.instance.log('UPLOAD: savesubmission error match: ${match.group(0)}');
-          break;
-        }
-      }
-
-      if (!submitConfirmed && submitError == null) {
-        // Check if we're being redirected back to the assignment page instead
-        // If we see the edit submission form again, it means saving failed
-        if (submitBody.contains('action=editsubmission') || submitBody.contains('files_filemanager')) {
-          submitError = 'Submission form was rejected by Moodle. Possible missing fields or session expired.';
-        }
+      // Attempt 3: if still failed and submitforgrading exists, retry with it too
+      if (submitError != null && hasSubmitForGrading) {
+        await Logger.instance.log('UPLOAD: Retrying savesubmission with submitforgrading');
+        submitError = await doSaveSubmission({
+          'sesskey': sesskey,
+          '_qf__mod_assign_submission_form': '1',
+          'files_filemanager': finalItemid.toString(),
+          'submitbutton': submitButtonValue,
+          'submissionstatement': '1',
+          'submitforgrading': '1',
+        });
       }
 
       if (submitError != null) {
@@ -1207,25 +1201,41 @@ class MoodleService {
 
       // Find submitted files: scan submission regions only, no fallback
       final uploadSeenUrls = <String>{};
-      final uploadSubRegionSelectors = [
+
+      // Helper: check if link is inside an intro/description container
+      bool isInIntroArea(dynamic link) {
+        var parent = link.parent;
+        while (parent != null) {
+          final classAttr = parent.attributes['class'] ?? '';
+          if (parent.id == 'intro' ||
+              parent.attributes['data-region'] == 'activity-info' ||
+              parent.attributes['data-region'] == 'activity-header' ||
+              classAttr.contains('no-overflow') ||
+              classAttr.contains('activity-description')) {
+            return true;
+          }
+          parent = parent.parent;
+        }
+        return false;
+      }
+
+      final uploadSubmissionSelectors = [
         '[data-region="submission-content"]',
         '[data-region="submission-received"]',
         '[data-region="submissions"]',
-        '.submission-received-files',
         '.submissionplugins',
         '.fileuploadsubmission',
-        'ul.submission-files',
-        '.submissionstatustext',
-        '[id*="submission"] .files',
-        '.assignsubmission',
       ];
-      for (final sel in uploadSubRegionSelectors) {
+      for (final sel in uploadSubmissionSelectors) {
         final elements = verifyDoc.querySelectorAll(sel);
         for (final el in elements) {
           final links = el.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
           for (final link in links) {
             final href = link.attributes['href'];
             if (href == null) continue;
+
+            if (isInIntroArea(link)) continue;
+
             String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
             if (filename.isEmpty || filename == 'Download' || filename == 'download') {
               final parent = link.parent;
@@ -1338,41 +1348,76 @@ class MoodleService {
         return {'success': false, 'message': 'Could not find session key.'};
       }
 
-      // Step 2: First try GET-based removal (works on most Moodle versions)
+      // Step 2: Try to remove submission on Moodle
+      bool remoteSuccess = false;
+
+      // Attempt A: GET-based removal (standard Moodle flow)
       await Logger.instance.log('REMOVE_SUB: Trying GET removesubmission');
-      const removeUrl = '/mod/assign/view.php';
-      final removeGetResp = await _get(client,
-        '$_baseUrl$removeUrl?id=$cmid&action=removesubmission&sesskey=$sesskey&confirm=1',
-      );
-
-      final getBody = removeGetResp.body.toLowerCase();
-      final removeSuccess = !getBody.contains('removesubmission') ||
-          getBody.contains('removed') ||
-          getBody.contains('submission has been removed');
-
-      // Step 3: Clear local DB regardless (best-effort remote)
-      final db = await DatabaseService.instance.database;
-      List<Map<String, dynamic>> existing;
-      if (taskId != null) {
-        existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
-      } else {
-        existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
-      }
-      if (existing.isNotEmpty) {
-        final matchId = existing.first['id'] as int;
-        await db.update('tasks', {
-          'file_uploaded': 0,
-          'is_submitted': 0,
-          'submission_files': '[]',
-          'submission_status': null,
-          'last_submission_check': DateTime.now().toIso8601String(),
-        }, where: 'id = ?', whereArgs: [matchId]);
+      try {
+        final removeGetResp = await _get(client,
+          '$_baseUrl/mod/assign/view.php?id=$cmid&action=removesubmission&sesskey=$sesskey&confirm=1',
+        );
+        final getBody = removeGetResp.body;
+        remoteSuccess = getBody.contains('Your submission has been removed') ||
+            getBody.contains('Su entrega ha sido eliminada') ||
+            getBody.contains('class="notifysuccess"') ||
+            (!getBody.contains('removesubmission') && !getBody.contains('notifyproblem') && !getBody.contains('role="alert"'));
+      } catch (e) {
+        await Logger.instance.log('REMOVE_SUB: GET removal failed: $e');
       }
 
-      await Logger.instance.log('REMOVE_SUB: Success=$removeSuccess');
+      // Attempt B: POST-based removal (fallback for some Moodle versions)
+      if (!remoteSuccess) {
+        await Logger.instance.log('REMOVE_SUB: Trying POST removesubmission');
+        try {
+          final removePostResp = await client.post(
+            Uri.parse('$_baseUrl/mod/assign/view.php'),
+            headers: _headers(),
+            body: {
+              'id': cmid,
+              'action': 'removesubmission',
+              'sesskey': sesskey,
+              'confirm': '1',
+            },
+          ).timeout(_requestTimeout);
+
+          final postBody = removePostResp.body;
+          remoteSuccess = postBody.contains('Your submission has been removed') ||
+              postBody.contains('Su entrega ha sido eliminada') ||
+              postBody.contains('class="notifysuccess"') ||
+              (!postBody.contains('removesubmission') && !postBody.contains('notifyproblem') && !postBody.contains('role="alert"'));
+        } catch (e) {
+          await Logger.instance.log('REMOVE_SUB: POST removal failed: $e');
+        }
+      }
+
+      // Step 3: Clear local DB if remote removal succeeded
+      if (remoteSuccess) {
+        final db = await DatabaseService.instance.database;
+        List<Map<String, dynamic>> existing;
+        if (taskId != null) {
+          existing = await db.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+        } else {
+          existing = await db.query('tasks', where: 'url = ?', whereArgs: [taskUrl]);
+        }
+        if (existing.isNotEmpty) {
+          final matchId = existing.first['id'] as int;
+          await db.update('tasks', {
+            'file_uploaded': 0,
+            'is_submitted': 0,
+            'submission_files': '[]',
+            'submission_status': null,
+            'last_submission_check': DateTime.now().toIso8601String(),
+          }, where: 'id = ?', whereArgs: [matchId]);
+        }
+      }
+
+      await Logger.instance.log('REMOVE_SUB: Success=$remoteSuccess');
       return {
-        'success': removeSuccess,
-        'message': removeSuccess ? 'Submission removed successfully.' : 'Could not remove submission on Moodle server. Local data cleared.',
+        'success': remoteSuccess,
+        'message': remoteSuccess
+            ? 'Submission removed successfully.'
+            : 'Could not remove submission on Moodle. It may already be graded. Please try in your browser.',
       };
     } catch (e) {
       await Logger.instance.log('REMOVE_SUB: Exception: $e');
@@ -1490,29 +1535,44 @@ class MoodleService {
         }
       }
 
-      // --- 3) Find submission files ONLY within submission-specific regions ---
+      // --- 3) Find submission files ONLY within submission-specific HTML regions ---
       final seenUrls = <String>{};
 
-      // Scan all HTML elements whose data-region attribute suggests a submission file area
-      final subRegionSelectors = [
+      // Helper: check if link is inside an intro/description container
+      bool isInIntroArea(dynamic link) {
+        var parent = link.parent;
+        while (parent != null) {
+          final classAttr = parent.attributes['class'] ?? '';
+          if (parent.id == 'intro' ||
+              parent.attributes['data-region'] == 'activity-info' ||
+              parent.attributes['data-region'] == 'activity-header' ||
+              classAttr.contains('no-overflow') ||
+              classAttr.contains('activity-description')) {
+            return true;
+          }
+          parent = parent.parent;
+        }
+        return false;
+      }
+
+      // Scan pluginfile links only inside known submission containers
+      final submissionRegionSelectors = [
         '[data-region="submission-content"]',
         '[data-region="submission-received"]',
         '[data-region="submissions"]',
-        '.submission-received-files',
         '.submissionplugins',
         '.fileuploadsubmission',
-        'ul.submission-files',
-        '.submissionstatustext',      // often contains the file list
-        '[id*="submission"] .files',   // generic: any #submission* element containing files
-        '.assignsubmission',           // submission plugin containers
       ];
-      for (final sel in subRegionSelectors) {
+      for (final sel in submissionRegionSelectors) {
         final elements = assignDoc.querySelectorAll(sel);
         for (final el in elements) {
           final links = el.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
           for (final link in links) {
             final href = link.attributes['href'];
             if (href == null) continue;
+
+            // Double-check link is not in intro area (defensive)
+            if (isInIntroArea(link)) continue;
 
             String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
 
