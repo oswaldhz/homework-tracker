@@ -29,7 +29,8 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   Future<void> _selectDate(BuildContext context, bool isStart) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: isStart ? _startDate ?? DateTime.now() : _endDate ?? DateTime.now(),
+      initialDate:
+          isStart ? _startDate ?? DateTime.now() : _endDate ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
@@ -59,9 +60,8 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 24),
-          
           DropdownButtonFormField<String>(
-            value: _selectedCourseId,
+            initialValue: _selectedCourseId,
             decoration: const InputDecoration(
               labelText: 'Course',
               border: OutlineInputBorder(),
@@ -69,9 +69,9 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             items: [
               const DropdownMenuItem(value: null, child: Text('All Courses')),
               ...api.courses.map((course) => DropdownMenuItem(
-                value: course['id'].toString(),
-                child: Text(course['name']),
-              )),
+                    value: course['id'].toString(),
+                    child: Text(course['name']),
+                  )),
             ],
             onChanged: (value) {
               setState(() {
@@ -80,9 +80,8 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             },
           ),
           const SizedBox(height: 16),
-          
           DropdownButtonFormField<String>(
-            value: _selectedStatus,
+            initialValue: _selectedStatus,
             decoration: const InputDecoration(
               labelText: 'Status',
               border: OutlineInputBorder(),
@@ -100,7 +99,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             },
           ),
           const SizedBox(height: 16),
-          
           Row(
             children: [
               Expanded(
@@ -141,7 +139,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             ],
           ),
           const SizedBox(height: 24),
-          
           Row(
             children: [
               Expanded(

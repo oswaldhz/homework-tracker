@@ -18,10 +18,10 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+class _DashboardScreenState extends State<DashboardScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _weekOnly = false;
-
 
   @override
   void initState() {
@@ -131,7 +131,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         actions: [
           IconButton(
             icon: Icon(
-              themeProvider.themeMode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode,
+              themeProvider.themeMode == ThemeMode.dark
+                  ? Icons.light_mode
+                  : Icons.dark_mode,
             ),
             tooltip: 'Toggle theme',
             onPressed: () {
@@ -165,7 +167,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               final success = await api.refresh();
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(success ? 'Refreshed!' : 'Refresh failed')),
+                  SnackBar(
+                      content: Text(success ? 'Refreshed!' : 'Refresh failed')),
                 );
               }
             },
@@ -198,15 +201,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           tabs: [
             Tab(text: 'Pending (${stats['pending'] ?? 0})'),
             Tab(text: 'Done (${stats['completed'] ?? 0})'),
-            Tab(text: 'Overdue'),
+            const Tab(text: 'Overdue'),
           ],
         ),
       ),
       body: Column(
         children: [
           _buildStatsBar(stats),
-          if (api.filter.isActive)
-            _buildFilterChip(),
+          if (api.filter.isActive) _buildFilterChip(),
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -220,16 +222,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Widget _buildStatsBar(Map<String, int> stats) {
     final overdueCount = stats['overdue'] ?? 0;
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          _StatChip(label: 'Total', value: stats['total'] ?? 0, color: Colors.blue),
+          _StatChip(
+              label: 'Total', value: stats['total'] ?? 0, color: Colors.blue),
           const SizedBox(width: 8),
-          _StatChip(label: 'Done', value: stats['completed'] ?? 0, color: Colors.green),
+          _StatChip(
+              label: 'Done',
+              value: stats['completed'] ?? 0,
+              color: Colors.green),
           const SizedBox(width: 8),
-          _StatChip(label: 'Due Soon', value: stats['due_soon'] ?? 0, color: Colors.orange),
+          _StatChip(
+              label: 'Due Soon',
+              value: stats['due_soon'] ?? 0,
+              color: Colors.orange),
           if (overdueCount > 0) ...[
             const SizedBox(width: 8),
             _OverdueChip(count: overdueCount),
@@ -270,14 +279,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     ),
                   if (api.filter.startDate != null)
                     _FilterChip(
-                      label: 'From: ${api.filter.startDate!.day}/${api.filter.startDate!.month}',
+                      label:
+                          'From: ${api.filter.startDate!.day}/${api.filter.startDate!.month}',
                       onDeleted: () {
                         api.setFilter(api.filter.copyWith(startDate: null));
                       },
                     ),
                   if (api.filter.endDate != null)
                     _FilterChip(
-                      label: 'To: ${api.filter.endDate!.day}/${api.filter.endDate!.month}',
+                      label:
+                          'To: ${api.filter.endDate!.day}/${api.filter.endDate!.month}',
                       onDeleted: () {
                         api.setFilter(api.filter.copyWith(endDate: null));
                       },
@@ -310,7 +321,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             Icon(Icons.check_circle_outline, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              tabIndex == 0 ? 'No pending tasks!' : tabIndex == 1 ? 'No completed tasks yet' : 'No overdue tasks!',
+              tabIndex == 0
+                  ? 'No pending tasks!'
+                  : tabIndex == 1
+                      ? 'No completed tasks yet'
+                      : 'No overdue tasks!',
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
           ],
@@ -335,7 +350,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   SnackBar(
                     content: Text(result['message'] ?? 'Task updated'),
                     backgroundColor: result['success'] == true
-                        ? (result['synced'] == true ? Colors.green : Colors.orange)
+                        ? (result['synced'] == true
+                            ? Colors.green
+                            : Colors.orange)
                         : Colors.red,
                     duration: const Duration(seconds: 3),
                   ),
@@ -354,7 +371,8 @@ class _StatChip extends StatelessWidget {
   final int value;
   final Color color;
 
-  const _StatChip({required this.label, required this.value, required this.color});
+  const _StatChip(
+      {required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -362,14 +380,18 @@ class _StatChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [
-            Text('$value', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-            Text(label, style: TextStyle(fontSize: 12, color: color.withOpacity(0.8))),
+            Text('$value',
+                style: TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 12, color: color.withValues(alpha: 0.8))),
           ],
         ),
       ),
@@ -388,21 +410,27 @@ class _OverdueChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.1),
+          color: Colors.red.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red.withOpacity(0.5), width: 2),
+          border:
+              Border.all(color: Colors.red.withValues(alpha: 0.5), width: 2),
         ),
         child: Column(
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.warning, size: 16, color: Colors.red),
+                const Icon(Icons.warning, size: 16, color: Colors.red),
                 const SizedBox(width: 4),
-                Text('$count', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
+                Text('$count',
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red)),
               ],
             ),
-            const Text('Overdue', style: TextStyle(fontSize: 12, color: Colors.red)),
+            const Text('Overdue',
+                style: TextStyle(fontSize: 12, color: Colors.red)),
           ],
         ),
       ),
@@ -422,7 +450,7 @@ class _FilterChip extends StatelessWidget {
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Theme.of(context).colorScheme.primary),
       ),

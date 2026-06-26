@@ -43,7 +43,7 @@ class TaskDetailScreen extends StatelessWidget {
   Future<void> _handleToggleComplete(BuildContext context) async {
     final api = context.read<ApiService>();
     final result = await api.toggleComplete(task.id);
-    
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -54,7 +54,7 @@ class TaskDetailScreen extends StatelessWidget {
           duration: const Duration(seconds: 3),
         ),
       );
-      
+
       Navigator.pop(context);
     }
   }
@@ -74,7 +74,9 @@ class TaskDetailScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: Icon(
-              task.isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+              task.isCompleted
+                  ? Icons.check_circle
+                  : Icons.radio_button_unchecked,
               color: task.isCompleted ? Colors.green : null,
             ),
             onPressed: () => _handleToggleComplete(context),
@@ -100,10 +102,10 @@ class TaskDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: isOverdue
-                    ? Colors.red.withOpacity(0.1)
+                    ? Colors.red.withValues(alpha: 0.1)
                     : isDueSoon
-                        ? Colors.orange.withOpacity(0.1)
-                        : Colors.green.withOpacity(0.1),
+                        ? Colors.orange.withValues(alpha: 0.1)
+                        : Colors.green.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isOverdue
@@ -219,8 +221,15 @@ class TaskDetailScreen extends StatelessWidget {
                       ),
                     );
                     if (context.mounted) {
-                      final fresh = context.read<ApiService>().tasks.where((t) => t.id == task.id).firstOrNull;
-                      if (fresh != null && (fresh.submissionFiles.isNotEmpty || fresh.isSubmitted || result == true)) {
+                      final fresh = context
+                          .read<ApiService>()
+                          .tasks
+                          .where((t) => t.id == task.id)
+                          .firstOrNull;
+                      if (fresh != null &&
+                          (fresh.submissionFiles.isNotEmpty ||
+                              fresh.isSubmitted ||
+                              result == true)) {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
@@ -274,7 +283,10 @@ class TaskDetailScreen extends StatelessWidget {
             ],
 
             // Submission Info Section
-            if (task.fileUploaded || task.isSubmitted || task.submissionFiles.isNotEmpty || task.quizGrade != null) ...[
+            if (task.fileUploaded ||
+                task.isSubmitted ||
+                task.submissionFiles.isNotEmpty ||
+                task.quizGrade != null) ...[
               const SizedBox(height: 24),
               Text(
                 'Submission Status',
@@ -293,28 +305,32 @@ class TaskDetailScreen extends StatelessWidget {
                       if (task.submissionFiles.isNotEmpty) ...[
                         Row(
                           children: [
-                            Icon(Icons.description, color: theme.colorScheme.primary),
+                            Icon(Icons.description,
+                                color: theme.colorScheme.primary),
                             const SizedBox(width: 8),
                             Text(
                               'Uploaded Files',
-                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                              style: theme.textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
                         const SizedBox(height: 12),
-                        ...task.submissionFiles.map((file) => _buildFileInfoCard(context, file)),
+                        ...task.submissionFiles
+                            .map((file) => _buildFileInfoCard(context, file)),
                         const SizedBox(height: 16),
                       ],
-                      
+
                       // Quiz grade info
                       if (task.quizGrade != null) ...[
                         Row(
                           children: [
-                            Icon(Icons.grade, color: Colors.amber),
+                            const Icon(Icons.grade, color: Colors.amber),
                             const SizedBox(width: 8),
                             Text(
                               'Quiz Score',
-                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                              style: theme.textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -323,9 +339,10 @@ class TaskDetailScreen extends StatelessWidget {
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.1),
+                            color: Colors.amber.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                            border: Border.all(
+                                color: Colors.amber.withValues(alpha: 0.3)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -337,7 +354,8 @@ class TaskDetailScreen extends StatelessWidget {
                                   color: Colors.amber[800],
                                 ),
                               ),
-                              if (task.quizFeedback != null && task.quizFeedback!.isNotEmpty) ...[
+                              if (task.quizFeedback != null &&
+                                  task.quizFeedback!.isNotEmpty) ...[
                                 const SizedBox(height: 8),
                                 Text(
                                   'Feedback: ${task.quizFeedback!}',
@@ -348,7 +366,8 @@ class TaskDetailScreen extends StatelessWidget {
                                 const SizedBox(height: 8),
                                 Text(
                                   'Last checked: ${_formatDate(task.lastSubmissionCheck!)}',
-                                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                                  style: theme.textTheme.bodySmall
+                                      ?.copyWith(color: Colors.grey[600]),
                                 ),
                               ],
                             ],
@@ -356,12 +375,14 @@ class TaskDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      
+
                       // Submission status text
-                      if (task.submissionStatus != null && task.submissionStatus!.isNotEmpty) ...[
+                      if (task.submissionStatus != null &&
+                          task.submissionStatus!.isNotEmpty) ...[
                         Row(
                           children: [
-                            Icon(Icons.info_outline, color: theme.colorScheme.primary),
+                            Icon(Icons.info_outline,
+                                color: theme.colorScheme.primary),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -375,7 +396,7 @@ class TaskDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      
+
                       // Sync button for assignments
                       if (_isAssignment) ...[
                         SizedBox(
@@ -392,7 +413,7 @@ class TaskDetailScreen extends StatelessWidget {
                 ),
               ),
             ],
-            
+
             const SizedBox(height: 24),
 
             // Toggle complete button
@@ -413,7 +434,7 @@ class TaskDetailScreen extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildFileInfoCard(BuildContext context, Map<String, dynamic> file) {
     final theme = Theme.of(context);
     final filename = file['filename'] as String? ?? 'Unknown file';
@@ -464,8 +485,12 @@ class TaskDetailScreen extends StatelessWidget {
                     filename,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w500,
-                      color: fileUrlValid || task.url != null ? theme.colorScheme.primary : null,
-                      decoration: fileUrlValid || task.url != null ? TextDecoration.underline : null,
+                      color: fileUrlValid || task.url != null
+                          ? theme.colorScheme.primary
+                          : null,
+                      decoration: fileUrlValid || task.url != null
+                          ? TextDecoration.underline
+                          : null,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -473,7 +498,8 @@ class TaskDetailScreen extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '${_formatFileSize(size)}  •  ${uploadedAt != null ? _formatDate(DateTime.parse(uploadedAt)) : 'Unknown date'}',
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: Colors.grey[600]),
                   ),
                 ],
               ),
@@ -481,7 +507,8 @@ class TaskDetailScreen extends StatelessWidget {
           ),
           if (fileUrlValid || task.url != null)
             IconButton(
-              icon: Icon(Icons.open_in_new, color: theme.colorScheme.primary, size: 20),
+              icon: Icon(Icons.open_in_new,
+                  color: theme.colorScheme.primary, size: 20),
               tooltip: fileUrlValid ? 'Open file' : 'Open in Moodle',
               onPressed: () => _launchUrl(fileUrlValid ? fileUrl : task.url!),
             ),
@@ -489,7 +516,7 @@ class TaskDetailScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.1),
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -511,17 +538,17 @@ class TaskDetailScreen extends StatelessWidget {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
-  
+
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
-  
+
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
-  
+
   IconData _getFileIcon(String extension) {
     switch (extension.toLowerCase()) {
       case 'pdf':
@@ -542,23 +569,27 @@ class TaskDetailScreen extends StatelessWidget {
         return Icons.insert_drive_file;
     }
   }
-  
+
   Future<void> _syncSubmissionStatus(BuildContext context) async {
     final api = context.read<ApiService>();
     final cred = await DatabaseService.instance.getCredentials();
     if (cred == null) return;
-    
-    final username = await AuthService.instance.decrypt(cred['encrypted_username'] as String);
-    final password = await AuthService.instance.decrypt(cred['encrypted_password'] as String);
+
+    final username = await AuthService.instance
+        .decrypt(cred['encrypted_username'] as String);
+    final password = await AuthService.instance
+        .decrypt(cred['encrypted_password'] as String);
     final loginType = cred['login_type'] as String? ?? 'moodle';
     final sessionCookie = loginType == 'office365' ? password : null;
-    
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Syncing with Moodle...'), duration: Duration(seconds: 2)),
+        const SnackBar(
+            content: Text('Syncing with Moodle...'),
+            duration: Duration(seconds: 2)),
       );
     }
-    
+
     try {
       // Try to fetch updated submission status
       await MoodleService.instance.checkSubmissionStatus(
@@ -569,19 +600,22 @@ class TaskDetailScreen extends StatelessWidget {
         taskId: task.id,
         sessionCookie: sessionCookie,
       );
-      
+
       // Refresh task data
       await api.fetchTasks();
-      
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Synced with Moodle'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Synced with Moodle'),
+              backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sync failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Sync failed: $e'), backgroundColor: Colors.red),
         );
       }
     }

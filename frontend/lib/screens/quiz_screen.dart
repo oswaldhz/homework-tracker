@@ -15,7 +15,7 @@ class QuizScreen extends StatefulWidget {
 
 class _QuizScreenState extends State<QuizScreen> {
   List<Map<String, dynamic>> _questions = [];
-  Map<String, dynamic> _answers = {};
+  final Map<String, dynamic> _answers = {};
   bool _loading = true;
   bool _submitting = false;
   String? _statusMessage;
@@ -68,14 +68,18 @@ class _QuizScreenState extends State<QuizScreen> {
 
     try {
       final api = context.read<ApiService>();
-      final stringAnswers = _answers.map((key, value) => MapEntry(key.toString(), value.toString()));
+      final stringAnswers = _answers
+          .map((key, value) => MapEntry(key.toString(), value.toString()));
       final result = await api.submitQuiz(widget.task.id, stringAnswers);
 
       setState(() {
         _submitSuccess = result['success'] == true;
         _openInBrowser = result['open_in_browser'] == true;
         _browserUrl = result['url'] ?? widget.task.url;
-        _statusMessage = result['message'] ?? (_submitSuccess ? 'Quiz submitted successfully!' : 'Submission failed');
+        _statusMessage = result['message'] ??
+            (_submitSuccess
+                ? 'Quiz submitted successfully!'
+                : 'Submission failed');
       });
     } catch (e) {
       setState(() {
@@ -105,7 +109,8 @@ class _QuizScreenState extends State<QuizScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                        Icon(Icons.error_outline,
+                            size: 64, color: Colors.red[300]),
                         const SizedBox(height: 16),
                         Text(
                           _statusMessage!,
@@ -115,7 +120,8 @@ class _QuizScreenState extends State<QuizScreen> {
                         const SizedBox(height: 24),
                         if (_openInBrowser && _browserUrl != null)
                           OutlinedButton.icon(
-                            onPressed: () => launchUrl(Uri.parse(_browserUrl!), mode: LaunchMode.externalApplication),
+                            onPressed: () => launchUrl(Uri.parse(_browserUrl!),
+                                mode: LaunchMode.externalApplication),
                             icon: const Icon(Icons.open_in_browser),
                             label: const Text('Open in Browser'),
                           ),
@@ -159,15 +165,12 @@ class _QuizScreenState extends State<QuizScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
                       ..._questions.asMap().entries.map((entry) {
                         final index = entry.key;
                         final question = entry.value;
                         return _buildQuestionCard(index, question);
                       }),
-                      
                       const SizedBox(height: 16),
-                      
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -176,38 +179,46 @@ class _QuizScreenState extends State<QuizScreen> {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.check),
-                          label: Text(_submitting ? 'Submitting...' : 'Submit Quiz'),
+                          label: Text(
+                              _submitting ? 'Submitting...' : 'Submit Quiz'),
                         ),
                       ),
-                      
                       if (_statusMessage != null) ...[
                         const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: _submitSuccess
-                                ? Colors.green.withOpacity(0.1)
-                                : Colors.orange.withOpacity(0.1),
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.orange.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: _submitSuccess ? Colors.green : Colors.orange,
+                              color:
+                                  _submitSuccess ? Colors.green : Colors.orange,
                             ),
                           ),
                           child: Row(
                             children: [
                               Icon(
-                                _submitSuccess ? Icons.check_circle : Icons.info,
-                                color: _submitSuccess ? Colors.green : Colors.orange,
+                                _submitSuccess
+                                    ? Icons.check_circle
+                                    : Icons.info,
+                                color: _submitSuccess
+                                    ? Colors.green
+                                    : Colors.orange,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   _statusMessage!,
                                   style: TextStyle(
-                                    color: _submitSuccess ? Colors.green.shade900 : Colors.orange.shade900,
+                                    color: _submitSuccess
+                                        ? Colors.green.shade900
+                                        : Colors.orange.shade900,
                                   ),
                                 ),
                               ),
@@ -217,7 +228,8 @@ class _QuizScreenState extends State<QuizScreen> {
                         if (_openInBrowser && _browserUrl != null) ...[
                           const SizedBox(height: 12),
                           OutlinedButton.icon(
-                            onPressed: () => launchUrl(Uri.parse(_browserUrl!), mode: LaunchMode.externalApplication),
+                            onPressed: () => launchUrl(Uri.parse(_browserUrl!),
+                                mode: LaunchMode.externalApplication),
                             icon: const Icon(Icons.open_in_browser),
                             label: const Text('Open in Browser'),
                           ),
@@ -275,13 +287,12 @@ class _QuizScreenState extends State<QuizScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            
             if (questionType == 'multiple_choice')
               ...answers.map((answer) {
                 final answerText = answer['text'] ?? '';
                 final answerValue = answer['value'] ?? '';
                 final isSelected = _answers[questionId] == answerValue;
-                
+
                 return RadioListTile<String>(
                   title: Text(answerText),
                   value: answerValue,
@@ -294,14 +305,14 @@ class _QuizScreenState extends State<QuizScreen> {
                   selected: isSelected,
                 );
               }),
-            
             if (questionType == 'checkbox')
               ...answers.map((answer) {
                 final answerText = answer['text'] ?? '';
                 final answerValue = answer['value'] ?? '';
-                final selectedValues = List<String>.from(_answers[questionId] ?? []);
+                final selectedValues =
+                    List<String>.from(_answers[questionId] ?? []);
                 final isSelected = selectedValues.contains(answerValue);
-                
+
                 return CheckboxListTile(
                   title: Text(answerText),
                   value: isSelected,
@@ -317,7 +328,6 @@ class _QuizScreenState extends State<QuizScreen> {
                   },
                 );
               }),
-            
             if (questionType == 'text')
               TextField(
                 maxLines: 5,
@@ -329,12 +339,11 @@ class _QuizScreenState extends State<QuizScreen> {
                   _answers[questionId] = value;
                 },
               ),
-            
             if (questionType == 'unknown')
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(

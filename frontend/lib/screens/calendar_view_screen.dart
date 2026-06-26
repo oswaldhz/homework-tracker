@@ -25,7 +25,7 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
 
   Map<DateTime, List<Task>> _getEventsForMonth() {
     Map<DateTime, List<Task>> events = {};
-    
+
     for (var task in widget.tasks) {
       if (task.dueDate != null) {
         final dateKey = DateTime(
@@ -33,14 +33,14 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
           task.dueDate!.month,
           task.dueDate!.day,
         );
-        
+
         if (!events.containsKey(dateKey)) {
           events[dateKey] = [];
         }
         events[dateKey]!.add(task);
       }
     }
-    
+
     return events;
   }
 
@@ -53,7 +53,8 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
   @override
   Widget build(BuildContext context) {
     final events = _getEventsForMonth();
-    final selectedTasks = _selectedDay != null ? _getTasksForDay(_selectedDay!) : [];
+    final selectedTasks =
+        _selectedDay != null ? _getTasksForDay(_selectedDay!) : [];
 
     return Scaffold(
       appBar: AppBar(
@@ -71,10 +72,15 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _LegendItem(color: Colors.red, label: 'Overdue'),
-                      _LegendItem(color: Colors.orange, label: 'Due Soon (within 3 days)'),
-                      _LegendItem(color: Colors.green, label: 'Completed'),
-                      _LegendItem(color: Theme.of(context).colorScheme.primary, label: 'Upcoming'),
+                      const _LegendItem(color: Colors.red, label: 'Overdue'),
+                      const _LegendItem(
+                          color: Colors.orange,
+                          label: 'Due Soon (within 3 days)'),
+                      const _LegendItem(
+                          color: Colors.green, label: 'Completed'),
+                      _LegendItem(
+                          color: Theme.of(context).colorScheme.primary,
+                          label: 'Upcoming'),
                     ],
                   ),
                   actions: [
@@ -120,7 +126,7 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
             calendarBuilders: CalendarBuilders(
               markerBuilder: (context, date, events) {
                 if (events.isEmpty) return null;
-                
+
                 return Positioned(
                   bottom: 1,
                   child: Container(
@@ -138,7 +144,7 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                         } else {
                           color = Theme.of(context).colorScheme.primary;
                         }
-                        
+
                         return Container(
                           width: 8,
                           height: 8,
@@ -148,7 +154,7 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                             color: color,
                             boxShadow: [
                               BoxShadow(
-                                color: color.withOpacity(0.5),
+                                color: color.withValues(alpha: 0.5),
                                 blurRadius: 2,
                                 spreadRadius: 0.5,
                               ),
@@ -163,7 +169,10 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
             ),
             calendarStyle: CalendarStyle(
               todayDecoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.3),
                 shape: BoxShape.rectangle,
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -176,13 +185,13 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                 fontWeight: FontWeight.bold,
                 color: Theme.of(context).colorScheme.primary,
               ),
-              selectedTextStyle: TextStyle(
+              selectedTextStyle: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
               cellPadding: const EdgeInsets.all(2),
             ),
-            headerStyle: HeaderStyle(
+            headerStyle: const HeaderStyle(
               formatButtonVisible: true,
               titleCentered: true,
               formatButtonShowsNext: false,
@@ -193,7 +202,10 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
           if (_selectedDay != null) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+              color: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.3),
               child: Row(
                 children: [
                   Icon(
@@ -205,13 +217,14 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                   Text(
                     '${_selectedDay!.day} ${_monthName(_selectedDay!.month)} ${_selectedDay!.year}',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                   const Spacer(),
                   if (selectedTasks.isNotEmpty)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.primary,
                         borderRadius: BorderRadius.circular(12),
@@ -238,24 +251,33 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                         Icon(
                           Icons.event_available,
                           size: 64,
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.3),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           _selectedDay != null
                               ? 'No tasks for this day'
                               : 'Select a day to view tasks',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                         ),
                         if (_selectedDay == null) ...[
                           const SizedBox(height: 8),
                           Text(
                             'Tap on any day in the calendar to see your tasks',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
                           ),
                         ],
                       ],
@@ -279,36 +301,49 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                               children: [
                                 Checkbox(
                                   value: task.isCompleted,
-                                  onChanged: (_) => widget.onToggleComplete(task),
+                                  onChanged: (_) =>
+                                      widget.onToggleComplete(task),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         task.title,
                                         style: TextStyle(
                                           fontWeight: FontWeight.w600,
                                           fontSize: 15,
-                                          decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                                          decoration: task.isCompleted
+                                              ? TextDecoration.lineThrough
+                                              : null,
                                           color: task.isCompleted
-                                              ? Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
+                                              ? Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withValues(alpha: 0.6)
                                               : null,
                                         ),
                                       ),
                                       const SizedBox(height: 4),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.secondaryContainer,
-                                          borderRadius: BorderRadius.circular(4),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .secondaryContainer,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
                                         ),
                                         child: Text(
                                           task.courseName,
                                           style: TextStyle(
                                             fontSize: 11,
-                                            color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSecondaryContainer,
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
@@ -323,7 +358,9 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                                                 ? Colors.red
                                                 : task.isDueSoon
                                                     ? Colors.orange
-                                                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                                                    : Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
@@ -334,8 +371,11 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                                                   ? Colors.red
                                                   : task.isDueSoon
                                                       ? Colors.orange
-                                                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                                              fontWeight: task.isOverdue || task.isDueSoon
+                                                      : Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                              fontWeight: task.isOverdue ||
+                                                      task.isDueSoon
                                                   ? FontWeight.w600
                                                   : FontWeight.normal,
                                             ),
@@ -343,13 +383,21 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                                           if (task.isOverdue) ...[
                                             const SizedBox(width: 8),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
                                               decoration: BoxDecoration(
-                                                color: Colors.red.withOpacity(0.1),
-                                                borderRadius: BorderRadius.circular(4),
-                                                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                                                color: Colors.red
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                                border: Border.all(
+                                                    color: Colors.red
+                                                        .withValues(
+                                                            alpha: 0.3)),
                                               ),
-                                              child: Text(
+                                              child: const Text(
                                                 'OVERDUE',
                                                 style: TextStyle(
                                                   fontSize: 10,
@@ -366,7 +414,9 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
                                 ),
                                 Icon(
                                   Icons.chevron_right,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                               ],
                             ),
@@ -383,8 +433,18 @@ class _CalendarViewScreenState extends State<CalendarViewScreen> {
 
   String _monthName(int month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
     ];
     return months[month - 1];
   }

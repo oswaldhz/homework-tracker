@@ -23,10 +23,10 @@ class TaskCard extends StatelessWidget {
     Color? backgroundColor;
     if (isOverdue) {
       borderColor = Colors.red;
-      backgroundColor = Colors.red.withOpacity(0.05);
+      backgroundColor = Colors.red.withValues(alpha: 0.05);
     } else if (isDueSoon) {
       borderColor = Colors.orange;
-      backgroundColor = Colors.orange.withOpacity(0.05);
+      backgroundColor = Colors.orange.withValues(alpha: 0.05);
     } else {
       borderColor = theme.colorScheme.outlineVariant;
     }
@@ -36,7 +36,8 @@ class TaskCard extends StatelessWidget {
       color: backgroundColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: borderColor, width: isOverdue || isDueSoon ? 2 : 1),
+        side: BorderSide(
+            color: borderColor, width: isOverdue || isDueSoon ? 2 : 1),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -52,7 +53,8 @@ class TaskCard extends StatelessWidget {
                   Checkbox(
                     value: task.isCompleted,
                     onChanged: (_) => onToggleComplete(),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -66,14 +68,19 @@ class TaskCard extends StatelessWidget {
                                 task.title,
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.w600,
-                                  decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                                  color: task.isCompleted ? theme.colorScheme.onSurface.withOpacity(0.5) : null,
+                                  decoration: task.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  color: task.isCompleted
+                                      ? theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.5)
+                                      : null,
                                 ),
                               ),
                             ),
                             // Submission status icons
                             if (task.fileUploaded || task.isSubmitted) ...[
-                              Icon(
+                              const Icon(
                                 Icons.cloud_done,
                                 size: 16,
                                 color: Colors.green,
@@ -81,7 +88,7 @@ class TaskCard extends StatelessWidget {
                               const SizedBox(width: 4),
                             ],
                             if (task.quizGrade != null) ...[
-                              Icon(
+                              const Icon(
                                 Icons.grade,
                                 size: 16,
                                 color: Colors.amber,
@@ -90,16 +97,18 @@ class TaskCard extends StatelessWidget {
                             ],
                             if (isOverdue)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: Colors.red,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Row(
+                                child: const Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.warning, size: 14, color: Colors.white),
-                                    const SizedBox(width: 4),
+                                    Icon(Icons.warning,
+                                        size: 14, color: Colors.white),
+                                    SizedBox(width: 4),
                                     Text(
                                       'OVERDUE',
                                       style: TextStyle(
@@ -115,15 +124,18 @@ class TaskCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withOpacity(0.1),
+                            color: theme.colorScheme.primary
+                                .withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.book, size: 14, color: theme.colorScheme.primary),
+                              Icon(Icons.book,
+                                  size: 14, color: theme.colorScheme.primary),
                               const SizedBox(width: 4),
                               Flexible(
                                 child: Text(
@@ -144,14 +156,24 @@ class TaskCard extends StatelessWidget {
                             Icon(
                               Icons.schedule,
                               size: 16,
-                              color: isOverdue ? Colors.red : isDueSoon ? Colors.orange : theme.colorScheme.onSurfaceVariant,
+                              color: isOverdue
+                                  ? Colors.red
+                                  : isDueSoon
+                                      ? Colors.orange
+                                      : theme.colorScheme.onSurfaceVariant,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               task.dueDateFormatted,
                               style: theme.textTheme.bodyMedium?.copyWith(
-                                color: isOverdue ? Colors.red : isDueSoon ? Colors.orange : theme.colorScheme.onSurfaceVariant,
-                                fontWeight: isOverdue || isDueSoon ? FontWeight.w600 : null,
+                                color: isOverdue
+                                    ? Colors.red
+                                    : isDueSoon
+                                        ? Colors.orange
+                                        : theme.colorScheme.onSurfaceVariant,
+                                fontWeight: isOverdue || isDueSoon
+                                    ? FontWeight.w600
+                                    : null,
                               ),
                             ),
                           ],
@@ -166,7 +188,9 @@ class TaskCard extends StatelessWidget {
                 const Divider(),
                 const SizedBox(height: 8),
                 Text(
-                  task.description!.length > 150 ? '${task.description!.substring(0, 150)}...' : task.description!,
+                  task.description!.length > 150
+                      ? '${task.description!.substring(0, 150)}...'
+                      : task.description!,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

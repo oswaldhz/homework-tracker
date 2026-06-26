@@ -51,8 +51,10 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
       final cred = await DatabaseService.instance.getCredentials();
       if (cred == null) return;
 
-      final username = await AuthService.instance.decrypt(cred['encrypted_username'] as String);
-      final password = await AuthService.instance.decrypt(cred['encrypted_password'] as String);
+      final username = await AuthService.instance
+          .decrypt(cred['encrypted_username'] as String);
+      final password = await AuthService.instance
+          .decrypt(cred['encrypted_password'] as String);
       final loginType = cred['login_type'] as String? ?? 'moodle';
       final sessionCookie = loginType == 'office365' ? password : null;
 
@@ -79,7 +81,16 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
   Future<void> _pickAndReplaceFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar', 'jpg', 'png'],
+      allowedExtensions: [
+        'pdf',
+        'doc',
+        'docx',
+        'txt',
+        'zip',
+        'rar',
+        'jpg',
+        'png'
+      ],
     );
 
     if (result != null && result.files.isNotEmpty) {
@@ -138,7 +149,16 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar', 'jpg', 'png'],
+      allowedExtensions: [
+        'pdf',
+        'doc',
+        'docx',
+        'txt',
+        'zip',
+        'rar',
+        'jpg',
+        'png'
+      ],
     );
 
     if (result != null && result.files.isNotEmpty) {
@@ -173,7 +193,8 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
         _openInBrowser = result['open_in_browser'] == true;
         _browserUrl = result['url'] ?? widget.task.url;
         _uploadedFileUrl = fileUrl;
-        _statusMessage = result['message'] ?? (_uploadSuccess ? 'File uploaded successfully!' : 'Upload failed');
+        _statusMessage = result['message'] ??
+            (_uploadSuccess ? 'File uploaded successfully!' : 'Upload failed');
       });
 
       // Refresh task data so uploaded file shows immediately
@@ -229,7 +250,9 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.calendar_today, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                        Icon(Icons.calendar_today,
+                            size: 16,
+                            color: theme.colorScheme.onSurfaceVariant),
                         const SizedBox(width: 4),
                         Text(
                           _task.dueDateFormatted,
@@ -258,11 +281,13 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.check_circle, color: Colors.green, size: 20),
+                          const Icon(Icons.check_circle,
+                              color: Colors.green, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             'Previously Uploaded Files',
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                            style: theme.textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -277,13 +302,16 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                         ),
                       ],
                       const SizedBox(height: 12),
-                      ..._task.submissionFiles.map((file) => _buildUploadedFileCard(context, file)),
+                      ..._task.submissionFiles
+                          .map((file) => _buildUploadedFileCard(context, file)),
                       const SizedBox(height: 12),
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _uploading ? null : () => _pickAndReplaceFile(),
+                              onPressed: _uploading
+                                  ? null
+                                  : () => _pickAndReplaceFile(),
                               icon: const Icon(Icons.swap_horiz, size: 18),
                               label: const Text('Replace File'),
                             ),
@@ -293,7 +321,11 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                             child: OutlinedButton.icon(
                               onPressed: _removing ? null : _removeSubmission,
                               icon: _removing
-                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
                                   : const Icon(Icons.delete_outline, size: 18),
                               label: const Text('Delete Submission'),
                               style: OutlinedButton.styleFrom(
@@ -310,7 +342,6 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
               ),
             ],
             const SizedBox(height: 24),
-            
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -324,7 +355,6 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
                     if (_selectedFile == null)
                       InkWell(
                         onTap: _pickFile,
@@ -332,7 +362,8 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(32),
                           decoration: BoxDecoration(
-                            border: Border.all(color: theme.colorScheme.outline),
+                            border:
+                                Border.all(color: theme.colorScheme.outline),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Column(
@@ -406,9 +437,7 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                           ],
                         ),
                       ),
-                    
                     const SizedBox(height: 16),
-                    
                     if (_selectedFile != null)
                       SizedBox(
                         width: double.infinity,
@@ -418,38 +447,43 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.upload),
-                          label: Text(_uploading ? 'Uploading...' : 'Upload to Moodle'),
+                          label: Text(
+                              _uploading ? 'Uploading...' : 'Upload to Moodle'),
                         ),
                       ),
-                    
                     if (_statusMessage != null) ...[
                       const SizedBox(height: 16),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: _uploadSuccess
-                              ? Colors.green.withOpacity(0.1)
-                              : Colors.orange.withOpacity(0.1),
+                              ? Colors.green.withValues(alpha: 0.1)
+                              : Colors.orange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: _uploadSuccess ? Colors.green : Colors.orange,
+                            color:
+                                _uploadSuccess ? Colors.green : Colors.orange,
                           ),
                         ),
                         child: Row(
                           children: [
                             Icon(
                               _uploadSuccess ? Icons.check_circle : Icons.info,
-                              color: _uploadSuccess ? Colors.green : Colors.orange,
+                              color:
+                                  _uploadSuccess ? Colors.green : Colors.orange,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 _statusMessage!,
                                 style: TextStyle(
-                                  color: _uploadSuccess ? Colors.green.shade900 : Colors.orange.shade900,
+                                  color: _uploadSuccess
+                                      ? Colors.green.shade900
+                                      : Colors.orange.shade900,
                                 ),
                               ),
                             ),
@@ -464,7 +498,8 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                             onPressed: () {
                               final url = _uploadedFileUrl ?? _browserUrl;
                               if (url != null) {
-                                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                launchUrl(Uri.parse(url),
+                                    mode: LaunchMode.externalApplication);
                               }
                               Navigator.pop(context, true);
                             },
@@ -478,7 +513,8 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(
-                            onPressed: () => launchUrl(Uri.parse(_browserUrl!), mode: LaunchMode.externalApplication),
+                            onPressed: () => launchUrl(Uri.parse(_browserUrl!),
+                                mode: LaunchMode.externalApplication),
                             icon: const Icon(Icons.open_in_browser),
                             label: const Text('Open in Browser'),
                           ),
@@ -495,17 +531,20 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
     );
   }
 
-  Widget _buildUploadedFileCard(BuildContext context, Map<String, dynamic> file) {
+  Widget _buildUploadedFileCard(
+      BuildContext context, Map<String, dynamic> file) {
     final theme = Theme.of(context);
     final filename = file['filename'] as String? ?? 'Unknown file';
     final fileType = file['type'] as String? ?? 'file';
     final size = file['size'] as int? ?? 0;
-    final uploadedAt = file['uploaded_at'] as String? ?? file['checked_at'] as String?;
+    final uploadedAt =
+        file['uploaded_at'] as String? ?? file['checked_at'] as String?;
     final fileUrl = file['url'] as String?;
     final fileUrlValid = fileUrl != null && fileUrl.isNotEmpty;
     final preview = file['preview'] as String?;
 
-    final isOnlineText = fileType == 'online_text' || filename == 'online_text_submission';
+    final isOnlineText =
+        fileType == 'online_text' || filename == 'online_text_submission';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -521,12 +560,14 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.text_fields, color: theme.colorScheme.primary, size: 28),
+                    Icon(Icons.text_fields,
+                        color: theme.colorScheme.primary, size: 28),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Online Text Submission',
-                        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w500),
                       ),
                     ),
                   ],
@@ -564,23 +605,27 @@ class _FileUploadScreenState extends State<FileUploadScreen> {
                     children: [
                       Text(
                         filename,
-                        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w500),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${_formatFileSize(size)}  •  ${uploadedAt != null ? _formatDate(DateTime.parse(uploadedAt)) : 'Unknown date'}',
-                        style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.grey[600]),
                       ),
                     ],
                   ),
                 ),
                 if (fileUrlValid)
                   IconButton(
-                    icon: Icon(Icons.open_in_new, color: theme.colorScheme.primary, size: 20),
+                    icon: Icon(Icons.open_in_new,
+                        color: theme.colorScheme.primary, size: 20),
                     tooltip: 'Open file',
-                    onPressed: () => launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication),
+                    onPressed: () => launchUrl(Uri.parse(fileUrl),
+                        mode: LaunchMode.externalApplication),
                   ),
               ],
             ),

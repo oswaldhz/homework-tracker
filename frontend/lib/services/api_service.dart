@@ -26,19 +26,15 @@ class ApiService extends ChangeNotifier {
 
   Future<bool> hasCredentials() async {
     try {
-      var cred = await DatabaseService.instance.getCredentials();
-      if (cred != null) {
-        try {
-          await AuthService.instance.decrypt(cred['encrypted_username'] as String);
-          await AuthService.instance.decrypt(cred['encrypted_password'] as String);
-          return true;
-        } catch (_) {
-          await DatabaseService.instance.clearAllCredentials();
-        }
-      }
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.containsKey('moodle_url');
+      final cred = await DatabaseService.instance.getCredentials();
+      if (cred == null) return false;
+      await AuthService.instance.decrypt(cred['encrypted_username'] as String);
+      await AuthService.instance.decrypt(cred['encrypted_password'] as String);
+      return true;
     } catch (_) {
+      await DatabaseService.instance.clearAllCredentials();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('moodle_url');
       return false;
     }
   }

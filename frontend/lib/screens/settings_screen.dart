@@ -118,8 +118,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: _geminiConfigured
-                                ? Colors.green.withOpacity(0.2)
-                                : Colors.orange.withOpacity(0.2),
+                                ? Colors.green.withValues(alpha: 0.2)
+                                : Colors.orange.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -210,10 +210,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
+                        color: Colors.blue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Colors.blue.withOpacity(0.3),
+                          color: Colors.blue.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(

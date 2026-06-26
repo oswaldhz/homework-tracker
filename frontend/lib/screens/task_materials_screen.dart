@@ -94,8 +94,8 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
             Text(
               'Generating personalized learning materials',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey,
-              ),
+                    color: Colors.grey,
+                  ),
             ),
           ],
         ),
@@ -103,21 +103,19 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
     }
 
     if (_error != null) {
-      final isQuotaError = _error!.toLowerCase().contains('out of ai tokens') || 
-                           _error!.toLowerCase().contains('quota');
-      
+      final isQuotaError = _error!.toLowerCase().contains('out of ai tokens') ||
+          _error!.toLowerCase().contains('quota');
+
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              isQuotaError ? Icons.battery_alert : Icons.error_outline, 
-              size: 64, 
-              color: isQuotaError ? Colors.orange[300] : Colors.red[300]
-            ),
+            Icon(isQuotaError ? Icons.battery_alert : Icons.error_outline,
+                size: 64,
+                color: isQuotaError ? Colors.orange[300] : Colors.red[300]),
             const SizedBox(height: 16),
             Text(
-              _error!, 
+              _error!,
               style: const TextStyle(fontSize: 16),
               textAlign: TextAlign.center,
             ),
@@ -137,9 +135,11 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
 
     final keyConcepts = List<dynamic>.from(_materials!['key_concepts'] ?? []);
     final studyTips = _materials!['study_tips'] ?? '';
-    final searchSuggestions = List<dynamic>.from(_materials!['search_suggestions'] ?? []);
+    final searchSuggestions =
+        List<dynamic>.from(_materials!['search_suggestions'] ?? []);
     final videos = List<Map<String, dynamic>>.from(_materials!['videos'] ?? []);
-    final articles = List<Map<String, dynamic>>.from(_materials!['articles'] ?? []);
+    final articles =
+        List<Map<String, dynamic>>.from(_materials!['articles'] ?? []);
     final isAiGenerated = _materials!['ai_generated'] ?? false;
     final credentialError = _materials!['credential_error'] as String?;
 
@@ -163,12 +163,14 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+                      Icon(Icons.warning_amber_rounded,
+                          color: Colors.orange.shade700),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           credentialError,
-                          style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
+                          style: TextStyle(
+                              color: Colors.orange.shade900, fontSize: 13),
                         ),
                       ),
                     ],
@@ -182,7 +184,8 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
                         await api.logout();
                         if (context.mounted) {
                           Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                            MaterialPageRoute(
+                                builder: (_) => const LoginScreen()),
                             (route) => false,
                           );
                         }
@@ -224,14 +227,18 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Text(
                       'Gemini',
-                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -239,22 +246,19 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
             ),
             const SizedBox(height: 16),
           ],
-
           Text(
             widget.task.title,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 24),
-
           if (keyConcepts.isNotEmpty) ...[
             _buildSectionTitle('Key Concepts', Icons.lightbulb),
             const SizedBox(height: 12),
             ...keyConcepts.map((concept) => _buildConceptCard(concept)),
             const SizedBox(height: 24),
           ],
-
           if (studyTips.isNotEmpty) ...[
             _buildSectionTitle('Study Tips', Icons.tips_and_updates),
             const SizedBox(height: 12),
@@ -262,9 +266,9 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.1),
+                color: Colors.amber.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,7 +278,10 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
                   Expanded(
                     child: Text(
                       studyTips,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(height: 1.5),
                     ),
                   ),
                 ],
@@ -282,21 +289,20 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
             ),
             const SizedBox(height: 24),
           ],
-
           if (videos.isNotEmpty) ...[
-            _buildSectionTitle('Video Tutorials', Icons.video_library, videos.length),
+            _buildSectionTitle(
+                'Video Tutorials', Icons.video_library, videos.length),
             const SizedBox(height: 12),
             ...videos.map((v) => _buildVideoCard(v)),
             const SizedBox(height: 24),
           ],
-
           if (articles.isNotEmpty) ...[
-            _buildSectionTitle('Articles & Reading', Icons.article, articles.length),
+            _buildSectionTitle(
+                'Articles & Reading', Icons.article, articles.length),
             const SizedBox(height: 12),
             ...articles.map((a) => _buildArticleCard(a)),
             const SizedBox(height: 24),
           ],
-
           if (searchSuggestions.isNotEmpty) ...[
             _buildSectionTitle('Search For These', Icons.search),
             const SizedBox(height: 12),
@@ -315,14 +321,18 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
         const SizedBox(width: 8),
         Text(
           title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         if (count != null) ...[
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              color:
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -358,14 +368,15 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.lightbulb_outline, size: 18, color: Theme.of(context).colorScheme.primary),
+                Icon(Icons.lightbulb_outline,
+                    size: 18, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     name,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                 ),
               ],
@@ -375,9 +386,9 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
               Text(
                 explanation,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[700],
-                  height: 1.4,
-                ),
+                      color: Colors.grey[700],
+                      height: 1.4,
+                    ),
               ),
             ],
           ],
@@ -391,17 +402,23 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        onTap: () => _launchUrl('https://www.google.com/search?q=${Uri.encodeComponent(q)}'),
+        onTap: () => _launchUrl(
+            'https://www.google.com/search?q=${Uri.encodeComponent(q)}'),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.3)),
+            border: Border.all(
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.3)),
             borderRadius: BorderRadius.circular(24),
           ),
           child: Row(
             children: [
-              Icon(Icons.search, size: 18, color: Theme.of(context).colorScheme.primary),
+              Icon(Icons.search,
+                  size: 18, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -438,7 +455,8 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
               Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(12)),
                     child: Image.network(
                       'https://img.youtube.com/vi/$videoId/mqdefault.jpg',
                       width: double.infinity,
@@ -457,7 +475,8 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
                     top: 8,
                     right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.red,
                         borderRadius: BorderRadius.circular(4),
@@ -465,9 +484,14 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.play_circle, color: Colors.white, size: 16),
+                          Icon(Icons.play_circle,
+                              color: Colors.white, size: 16),
                           SizedBox(width: 4),
-                          Text('YouTube', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('YouTube',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -481,7 +505,10 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
                 children: [
                   Text(
                     video['title'] ?? 'Video',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -500,8 +527,10 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-          child: Icon(Icons.article, color: Theme.of(context).colorScheme.primary),
+          backgroundColor:
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+          child:
+              Icon(Icons.article, color: Theme.of(context).colorScheme.primary),
         ),
         title: Text(
           article['title'] ?? 'Article',
@@ -512,7 +541,8 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (article['description'] != null)
-              Text(article['description'], maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(article['description'],
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
             if (source.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -520,7 +550,11 @@ class _TaskMaterialsScreenState extends State<TaskMaterialsScreen> {
                   children: [
                     Icon(Icons.public, size: 12, color: Colors.grey[600]),
                     const SizedBox(width: 4),
-                    Text(source, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600])),
+                    Text(source,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: Colors.grey[600])),
                   ],
                 ),
               ),

@@ -968,6 +968,21 @@ class MoodleService {
             .log('UPLOAD: Using default itemid=0 for new draft area');
       }
 
+      // When the task already has a submission, use itemid=0 to create a
+      // fresh draft area — otherwise the new file is added alongside the
+      // old one and the assignment's max file limit (often 1) is exceeded.
+      if (taskId != null && itemid != 0) {
+        final db = await DatabaseService.instance.database;
+        final existing = await db.query('tasks',
+            where: 'id = ? AND (file_uploaded = 1 OR is_submitted = 1)',
+            whereArgs: [taskId]);
+        if (existing.isNotEmpty) {
+          itemid = 0;
+          await Logger.instance.log(
+              'UPLOAD: Existing submission — forced itemid=0 for fresh draft');
+        }
+      }
+
       // Step 2: Discover upload repository ID
       await Logger.instance.log('UPLOAD: Discovering upload repository');
 
@@ -1130,15 +1145,26 @@ class MoodleService {
 
         if (payload['event'] == 'fileexists') return null;
 
-        final itemIdFromResponse = asInt(payload['itemid'] ?? payload['id']);
+        int? itemIdFromResponse = asInt(payload['itemid'] ?? payload['id']);
         final filenameFromResponse =
             asNonEmptyString(payload['filename'] ?? payload['file']);
+        final fileUrl = asNonEmptyString(payload['url'] ?? payload['fileurl']);
+
+        // Fallback: extract itemid from the response URL (draftfile.php/.../draft/NNNN/)
+        if (itemIdFromResponse == null && fileUrl != null) {
+          final draftMatch = RegExp(r'/draft/(\d+)/').firstMatch(fileUrl);
+          if (draftMatch != null) {
+            itemIdFromResponse = int.tryParse(draftMatch.group(1)!);
+          }
+        }
+
         if (itemIdFromResponse != null ||
             filenameFromResponse != null ||
-            payload['url'] != null) {
+            fileUrl != null) {
           return {
             'itemid': itemIdFromResponse ?? itemid,
             'filename': filenameFromResponse ?? originalFilename,
+            'url': fileUrl,
           };
         }
 
@@ -1780,12 +1806,9 @@ class MoodleService {
                   if (hiddenAction != null) {
                     final hiddenVal = hiddenAction.attributes['value'] ?? '';
                     if (hiddenVal.contains('removesubmission')) {
-                      final actionUri = Uri.tryParse(action);
-                      if (actionUri != null && actionUri.queryParameters.containsKey('id')) {
-                        removeLinkUrl = '$action&action=$hiddenVal';
-                      } else {
-                        removeLinkUrl = 'view.php?id=$cmid&action=$hiddenVal';
-                      }
+                      final hiddenId = parent.querySelector('input[type="hidden"][name="id"]');
+                      final formId = hiddenId?.attributes['value'] ?? '$cmid';
+                      removeLinkUrl = 'view.php?id=$formId&action=$hiddenVal';
                       break;
                     }
                   }

@@ -27,7 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _checkingSso = false;
   String? _ssoUrl;
   bool get _ssoDetected => _ssoUrl != null && _ssoUrl!.isNotEmpty;
-  
+
   List<Map<String, dynamic>> _savedCredentials = [];
   String? _selectedCredentialId;
 
@@ -61,7 +61,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // Try remember_me=1 first
         savedCredentials = await api.getAllSavedCredentials();
-        await Logger.instance.log('LOAD_CRED: DB getAllSavedCredentials returned ${savedCredentials.length}');
+        await Logger.instance.log(
+            'LOAD_CRED: DB getAllSavedCredentials returned ${savedCredentials.length}');
 
         if (savedCredentials.isEmpty) {
           // Fallback: any credential regardless of remember_me flag
@@ -69,9 +70,11 @@ class _LoginScreenState extends State<LoginScreen> {
           if (anyCred != null) {
             savedCredentials = [anyCred];
             rememberMe = (anyCred['remember_me'] as int? ?? 0) == 1;
-            await Logger.instance.log('LOAD_CRED: DB getAnyCredential found one, remember_me=$rememberMe');
+            await Logger.instance.log(
+                'LOAD_CRED: DB getAnyCredential found one, remember_me=$rememberMe');
           } else {
-            await Logger.instance.log('LOAD_CRED: DB has no credentials at all');
+            await Logger.instance
+                .log('LOAD_CRED: DB has no credentials at all');
           }
         } else {
           rememberMe = true;
@@ -80,8 +83,10 @@ class _LoginScreenState extends State<LoginScreen> {
         if (savedCredentials.isNotEmpty) {
           final cred = savedCredentials.first;
           final dbUrl = cred['moodle_url'] as String? ?? '';
-          final dbUsername = await api.decryptUsername(cred['encrypted_username'] as String);
-          final dbPassword = await api.decryptPassword(cred['encrypted_password'] as String);
+          final dbUsername =
+              await api.decryptUsername(cred['encrypted_username'] as String);
+          final dbPassword =
+              await api.decryptPassword(cred['encrypted_password'] as String);
           final dbLoginType = cred['login_type'] as String? ?? 'moodle';
 
           _urlController.text = dbUrl;
@@ -110,7 +115,8 @@ class _LoginScreenState extends State<LoginScreen> {
         final sfLoginType = prefs.getString('login_type') ?? 'moodle';
         final sfRememberMe = prefs.getBool('remember_me') ?? false;
 
-        await Logger.instance.log('LOAD_CRED: SharedPreferences - url=$sfUrl, user=$sfUsername, '
+        await Logger.instance.log(
+            'LOAD_CRED: SharedPreferences - url=$sfUrl, user=$sfUsername, '
             'password=${sfPassword != null ? 'set(${sfPassword.length})' : 'null'}'
             ', rememberMe=$sfRememberMe');
 
@@ -127,14 +133,17 @@ class _LoginScreenState extends State<LoginScreen> {
           savedPassword = sfPassword ?? '';
         }
       } catch (prefsErr) {
-        await Logger.instance.log('LOAD_CRED: SharedPreferences error: $prefsErr');
+        await Logger.instance
+            .log('LOAD_CRED: SharedPreferences error: $prefsErr');
       }
 
       // Decrypt display names for the dropdown
       for (final cred in savedCredentials) {
         try {
           final ctx = context;
-          cred['_displayName'] = await ctx.read<ApiService>().decryptUsername(cred['encrypted_username'] as String);
+          cred['_displayName'] = await ctx
+              .read<ApiService>()
+              .decryptUsername(cred['encrypted_username'] as String);
         } catch (_) {
           cred['_displayName'] = cred['encrypted_username'] as String;
         }
@@ -145,13 +154,17 @@ class _LoginScreenState extends State<LoginScreen> {
         _savedCredentials = savedCredentials;
         _rememberMe = rememberMe;
         _loadingSavedCredentials = false;
-        if (rememberMe && savedUrl.isNotEmpty && savedUsername.isNotEmpty && savedPassword.isNotEmpty) {
+        if (rememberMe &&
+            savedUrl.isNotEmpty &&
+            savedUsername.isNotEmpty &&
+            savedPassword.isNotEmpty) {
           shouldAutoLogin = true;
         }
       });
 
       if (shouldAutoLogin) {
-        await Logger.instance.log('LOAD_CRED: shouldAutoLogin=true, navigating to dashboard');
+        await Logger.instance
+            .log('LOAD_CRED: shouldAutoLogin=true, navigating to dashboard');
         await Future.delayed(const Duration(milliseconds: 100));
         if (mounted) {
           await _handleLogin();
@@ -159,7 +172,11 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
-      final checkUrl = savedUrl.isNotEmpty ? savedUrl : (savedCredentials.isNotEmpty ? savedCredentials.first['moodle_url'] as String? : null);
+      final checkUrl = savedUrl.isNotEmpty
+          ? savedUrl
+          : (savedCredentials.isNotEmpty
+              ? savedCredentials.first['moodle_url'] as String?
+              : null);
       if (checkUrl != null && checkUrl.isNotEmpty) {
         await _detectSso(checkUrl);
       }
@@ -189,8 +206,9 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setString('username', _usernameController.text.trim());
     await prefs.setString('password', _passwordController.text);
     await prefs.setBool('remember_me', true);
-    await Logger.instance.log('SAVE_CRED: saved to prefs (url=${_urlController.text.trim()}, user=${_usernameController.text.trim()}, passwordLen=${_passwordController.text.length})');
-    
+    await Logger.instance.log(
+        'SAVE_CRED: saved to prefs (url=${_urlController.text.trim()}, user=${_usernameController.text.trim()}, passwordLen=${_passwordController.text.length})');
+
     // Also save to database for autocomplete
     final api = context.read<ApiService>();
     await api.saveCredentials(
@@ -231,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final api = context.read<ApiService>();
     final username = await api.decryptUsername(cred['encrypted_username']);
     final password = await api.decryptPassword(cred['encrypted_password']);
-    
+
     setState(() {
       _urlController.text = cred['moodle_url'] as String;
       _usernameController.text = username;
@@ -239,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _rememberMe = (cred['remember_me'] as int? ?? 0) == 1;
       _selectedCredentialId = cred['id'].toString();
     });
-    
+
     await _detectSso(cred['moodle_url'] as String);
   }
 
@@ -271,7 +289,8 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } else if (mounted) {
-      final message = result['message'] ?? 'Login failed. Check your credentials and Moodle URL.';
+      final message = result['message'] ??
+          'Login failed. Check your credentials and Moodle URL.';
       final errorLower = message.toLowerCase();
       final isSessionError = errorLower.contains('sesion') ||
           errorLower.contains('session') ||
@@ -280,7 +299,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       setState(() {
         if (isSessionError && _ssoDetected) {
-          _error = '$message\n\nThis Moodle site uses Office 365 login. Please use the "Login with Office 365" button below.';
+          _error =
+              '$message\n\nThis Moodle site uses Office 365 login. Please use the "Login with Office 365" button below.';
         } else {
           _error = message;
         }
@@ -305,7 +325,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final result = await api.login(
       _urlController.text.trim(),
-      _usernameController.text.trim().isEmpty ? 'office365_user' : _usernameController.text.trim(),
+      _usernameController.text.trim().isEmpty
+          ? 'office365_user'
+          : _usernameController.text.trim(),
       '',
       loginType: 'office365',
       sessionCookie: cookie.trim(),
@@ -321,7 +343,8 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else if (mounted) {
       setState(() {
-        _error = result['message'] ?? 'Office 365 login failed. Please check the cookie and try again.';
+        _error = result['message'] ??
+            'Office 365 login failed. Please check the cookie and try again.';
       });
     }
   }
@@ -360,26 +383,32 @@ class _LoginScreenState extends State<LoginScreen> {
                     'Homework Tracker',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Connect your Moodle account',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                   ),
                   const SizedBox(height: 32),
                   if (_savedCredentials.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primaryContainer
+                            .withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.3),
                         ),
                       ),
                       child: Column(
@@ -395,16 +424,20 @@ class _LoginScreenState extends State<LoginScreen> {
                               const SizedBox(width: 8),
                               Text(
                                 'Saved Accounts',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            value: _selectedCredentialId,
+                            initialValue: _selectedCredentialId,
                             decoration: InputDecoration(
                               labelText: 'Select account to login',
                               hintText: 'Choose a saved account',
@@ -414,10 +447,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               fillColor: Theme.of(context).colorScheme.surface,
                               suffixIcon: _selectedCredentialId != null
                                   ? IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                      icon: const Icon(Icons.delete_outline,
+                                          color: Colors.red),
                                       onPressed: () {
-                                        final id = int.tryParse(_selectedCredentialId!);
-                                        if (id != null) _deleteSavedCredential(id);
+                                        final id = int.tryParse(
+                                            _selectedCredentialId!);
+                                        if (id != null)
+                                          _deleteSavedCredential(id);
                                         setState(() {
                                           _selectedCredentialId = null;
                                           _urlController.clear();
@@ -431,7 +467,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             items: _savedCredentials.map((cred) {
                               final url = cred['moodle_url'] as String;
-                              final displayUser = cred['_displayName'] as String? ?? cred['encrypted_username'] as String;
+                              final displayUser =
+                                  cred['_displayName'] as String? ??
+                                      cred['encrypted_username'] as String;
                               return DropdownMenuItem<String>(
                                 value: cred['id'].toString(),
                                 child: Text(
@@ -442,7 +480,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             }).toList(),
                             onChanged: (value) {
                               if (value == null) return;
-                              final cred = _savedCredentials.firstWhere((c) => c['id'].toString() == value);
+                              final cred = _savedCredentials.firstWhere(
+                                  (c) => c['id'].toString() == value);
                               _selectSavedCredential(cred);
                             },
                           ),
@@ -451,11 +490,18 @@ class _LoginScreenState extends State<LoginScreen> {
                             FilledButton.icon(
                               onPressed: api.loading ? null : _handleLogin,
                               icon: api.loading
-                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white))
                                   : const Icon(Icons.login),
-                              label: Text(api.loading ? 'Connecting...' : 'Quick Login'),
+                              label: Text(api.loading
+                                  ? 'Connecting...'
+                                  : 'Quick Login'),
                               style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
                               ),
                             ),
                           ],
@@ -465,17 +511,28 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
                     Row(
                       children: [
-                        Expanded(child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
+                        Expanded(
+                            child: Divider(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant)),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           child: Text(
                             'or enter new credentials',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
                           ),
                         ),
-                        Expanded(child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
+                        Expanded(
+                            child: Divider(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant)),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -484,13 +541,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
+                        color: Colors.blue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                        border: Border.all(
+                            color: Colors.blue.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.cloud,
                             color: Colors.blue,
                             size: 20,
@@ -531,7 +589,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               height: 18,
                               child: Padding(
                                 padding: EdgeInsets.all(10.0),
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               ),
                             )
                           : _ssoDetected
@@ -543,8 +602,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     keyboardType: TextInputType.url,
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Enter your Moodle URL';
-                      if (!value.startsWith('http')) return 'URL must start with http:// or https://';
+                      if (value == null || value.isEmpty)
+                        return 'Enter your Moodle URL';
+                      if (!value.startsWith('http'))
+                        return 'URL must start with http:// or https://';
                       return null;
                     },
                   ),
@@ -558,7 +619,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Enter your username';
+                      if (value == null || value.isEmpty)
+                        return 'Enter your username';
                       return null;
                     },
                   ),
@@ -572,12 +634,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: const Icon(Icons.lock),
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        icon: Icon(_obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Enter your password';
+                      if (value == null || value.isEmpty)
+                        return 'Enter your password';
                       return null;
                     },
                   ),
@@ -586,9 +652,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.3),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .errorContainer
+                            .withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Theme.of(context).colorScheme.error.withOpacity(0.3)),
+                        border: Border.all(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .error
+                                .withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         _error!,
@@ -602,9 +675,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                   const SizedBox(height: 16),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -623,15 +700,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               Text(
                                 'Remember me',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w500,
+                                    ),
                               ),
                               Text(
                                 'Save credentials for quick login next time',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
                               ),
                             ],
                           ),
@@ -643,7 +728,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   FilledButton.icon(
                     onPressed: api.loading ? null : _handleLogin,
                     icon: api.loading
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.login),
                     label: Text(api.loading ? 'Connecting...' : 'Connect'),
                     style: FilledButton.styleFrom(
@@ -744,8 +832,10 @@ class _Office365CookieDialogState extends State<_Office365CookieDialog> {
                 labelText: 'MoodleSession cookie',
                 border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
-                  icon: Icon(_obscureCookie ? Icons.visibility : Icons.visibility_off),
-                  onPressed: () => setState(() => _obscureCookie = !_obscureCookie),
+                  icon: Icon(
+                      _obscureCookie ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () =>
+                      setState(() => _obscureCookie = !_obscureCookie),
                 ),
               ),
             ),
@@ -762,7 +852,8 @@ class _Office365CookieDialogState extends State<_Office365CookieDialog> {
           child: const Text('Open Browser'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(_cookieController.text.trim()),
+          onPressed: () =>
+              Navigator.of(context).pop(_cookieController.text.trim()),
           child: const Text('Connect'),
         ),
       ],
