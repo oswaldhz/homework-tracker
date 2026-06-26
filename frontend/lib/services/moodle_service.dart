@@ -1118,33 +1118,79 @@ class MoodleService {
         }
       }
 
-      // Find ALL pluginfile.php links on the page and extract filenames
-      final pluginLinks = verifyDoc.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
-      final seenUrls = <String>{};
-      for (final link in pluginLinks) {
-        final href = link.attributes['href'];
-        if (href == null) continue;
+      // Find submitted files: scan submission regions first, avoid description files
+      final uploadSeenUrls = <String>{};
 
-        // Try to extract filename: (a) link text, (b) parent li/div text, (c) URL basename
-        String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-
-        if (filename.isEmpty || filename == 'Download' || filename == 'download') {
-          final parent = link.parent;
-          if (parent != null) {
-            final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-            if (siblingText.length > 1 && siblingText.length < 200) {
-              filename = siblingText;
+      // First pass: look in submission-specific regions
+      final uploadSubRegions = verifyDoc.querySelectorAll('[data-region*="submission-content"], [data-region*="submission-received"], [data-region*="submissions"], .submission-received-files, .submissionplugins, .fileuploadsubmission, ul.submission-files');
+      for (final region in uploadSubRegions) {
+        final links = region.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
+        for (final link in links) {
+          final href = link.attributes['href'];
+          if (href == null) continue;
+          String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+          if (filename.isEmpty || filename == 'Download' || filename == 'download') {
+            final parent = link.parent;
+            if (parent != null) {
+              final siblingText = parent.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+              if (siblingText.length > 1 && siblingText.length < 200) filename = siblingText;
             }
           }
+          if (filename.isEmpty || filename.length > 200) {
+            filename = Uri.decodeComponent(href.split('/').lastWhere((s) => s.contains('.'), orElse: () => href.split('/').last));
+          }
+          final resolved = _resolveUrl(href);
+          if (resolved.isNotEmpty && uploadSeenUrls.add(resolved)) {
+            hasSubmission = true;
+            if (submittedFileName == null) submittedFileName = filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+            submissionFilesWithUrls.add({
+              'filename': filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
+              'url': resolved,
+              'size': await File(filePath).length(),
+              'uploaded_at': DateTime.now().toIso8601String(),
+              'itemid': finalItemid,
+            });
+          }
+        }
+      }
+
+      // Second pass: scan the rest of the page but skip the intro/description area
+      if (submissionFilesWithUrls.isEmpty) {
+        final introAnchors = <String>{};
+        for (final introEl in verifyDoc.querySelectorAll('#intro, [data-region*="activity-info"], [data-region*="activity-header"], .activity-description, .no-overflow')) {
+          introAnchors.add(introEl.outerHtml ?? '');
         }
 
-        if (filename.isEmpty || filename.length > 200) {
-          final segments = href.split('/');
-          filename = Uri.decodeComponent(segments.lastWhere((s) => s.contains('.'), orElse: () => segments.last));
-        }
+        final allLinks = verifyDoc.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
+        for (final link in allLinks) {
+          final href = link.attributes['href'];
+          if (href == null) continue;
+          final resolved = _resolveUrl(href);
+          if (resolved.isEmpty || !uploadSeenUrls.add(resolved)) continue;
 
-        final resolved = _resolveUrl(href);
-        if (resolved.isNotEmpty && seenUrls.add(resolved)) {
+          final linkHtml = link.outerHtml ?? '';
+          if (linkHtml.isNotEmpty && introAnchors.any((a) => a.contains(linkHtml))) continue;
+
+          var parent = link.parent;
+          bool isInIntro = false;
+          while (parent != null) {
+            final classAttr = parent.attributes['class'] ?? '';
+            if (parent.id == 'intro' ||
+                parent.attributes['data-region'] == 'activity-info' ||
+                parent.attributes['data-region'] == 'activity-header' ||
+                classAttr.contains('no-overflow') ||
+                classAttr.contains('activity-description')) {
+              isInIntro = true;
+              break;
+            }
+            parent = parent.parent;
+          }
+          if (isInIntro) continue;
+
+          String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+          if (filename.isEmpty || filename.length > 200) {
+            filename = Uri.decodeComponent(href.split('/').lastWhere((s) => s.contains('.'), orElse: () => href.split('/').last));
+          }
           hasSubmission = true;
           if (submittedFileName == null) submittedFileName = filename.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
           submissionFilesWithUrls.add({
@@ -1154,33 +1200,6 @@ class MoodleService {
             'uploaded_at': DateTime.now().toIso8601String(),
             'itemid': finalItemid,
           });
-        }
-      }
-
-      // Fallback: look in submission-specific regions
-      if (submissionFilesWithUrls.isEmpty) {
-        final subRegions = verifyDoc.querySelectorAll('[data-region*="submission"], .submission-received-files, .submissionplugins, .fileuploadsubmission, ul.submission-files');
-        for (final region in subRegions) {
-          final links = region.querySelectorAll('a');
-          for (final link in links) {
-            final href = link.attributes['href'] ?? '';
-            if (!href.contains('pluginfile.php') && !href.contains('draftfile.php')) continue;
-            if (seenUrls.contains(_resolveUrl(href))) continue;
-            String name = link.text.trim();
-            if (name.isEmpty || name.length > 200) {
-              name = Uri.decodeComponent(href.split('/').last);
-            }
-            hasSubmission = true;
-            if (submittedFileName == null) submittedFileName = name.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-            seenUrls.add(_resolveUrl(href));
-            submissionFilesWithUrls.add({
-              'filename': name.replaceAll(RegExp(r'\s{2,}'), ' ').trim(),
-              'url': _resolveUrl(href),
-              'size': await File(filePath).length(),
-              'uploaded_at': DateTime.now().toIso8601String(),
-              'itemid': finalItemid,
-            });
-          }
         }
         if (submissionFilesWithUrls.isEmpty && hasSubmission) {
           await Logger.instance.log('UPLOAD VERIFY DEBUG: No files found. HTML: ${verifyResp.body.substring(0, verifyResp.body.length.clamp(0, 3000))}');
@@ -1427,8 +1446,8 @@ class MoodleService {
       // --- 3) Find submission files ONLY within submission-specific regions ---
       final seenUrls = <String>{};
 
-      // First pass: look for files inside submission content regions only
-      final subRegions = assignDoc.querySelectorAll('[data-region*="submission-content"], [data-region*="submission-received"], .submission-received-files, .submissionplugins, .fileuploadsubmission, ul.submission-files');
+      // First pass: look for files inside submission regions only
+      final subRegions = assignDoc.querySelectorAll('[data-region*="submission-content"], [data-region*="submission-received"], [data-region*="submissions"], .submission-received-files, .submissionplugins, .fileuploadsubmission, ul.submission-files');
       for (final region in subRegions) {
         final links = region.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
         for (final link in links) {
@@ -1464,10 +1483,13 @@ class MoodleService {
         }
       }
 
-      // Second pass: if nothing found yet, scan all pluginfile links on the page but skip the intro/description area
+      // Second pass: if nothing found yet, scan all pluginfile links but skip the intro/description area
       if (submissionFiles.isEmpty) {
-        final introEl = assignDoc.querySelector('#intro, [data-region*="activity-info"], .no-overflow');
-        final introText = introEl?.text.trim() ?? '';
+        // Identify description anchor elements
+        final introAnchors = <String>{};
+        for (final introEl in assignDoc.querySelectorAll('#intro, [data-region*="activity-info"], [data-region*="activity-header"], .activity-description, .no-overflow')) {
+          introAnchors.add(introEl.outerHtml ?? '');
+        }
 
         final allLinks = assignDoc.querySelectorAll('a[href*="pluginfile.php"], a[href*="draftfile.php"], a[href*="tokenpluginfile.php"]');
         for (final link in allLinks) {
@@ -1476,15 +1498,20 @@ class MoodleService {
           final resolved = _resolveUrl(href);
           if (resolved.isEmpty || !seenUrls.add(resolved)) continue;
 
-          // Skip links whose text matches the intro/description content
-          final linkText = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-          if (linkText.isNotEmpty && introText.contains(linkText)) continue;
+          // Skip links whose HTML is contained within any description anchor
+          final linkHtml = link.outerHtml ?? '';
+          if (linkHtml.isNotEmpty && introAnchors.any((a) => a.contains(linkHtml))) continue;
 
-          // Skip links that are descendants of the intro element
+          // Also skip if any ancestor is a known intro container
           var parent = link.parent;
           bool isInIntro = false;
           while (parent != null) {
-            if (parent.id == 'intro' || parent.attributes['data-region'] == 'activity-info') {
+            final classAttr = parent.attributes['class'] ?? '';
+            if (parent.id == 'intro' ||
+                parent.attributes['data-region'] == 'activity-info' ||
+                parent.attributes['data-region'] == 'activity-header' ||
+                classAttr.contains('no-overflow') ||
+                classAttr.contains('activity-description')) {
               isInIntro = true;
               break;
             }
@@ -1492,7 +1519,7 @@ class MoodleService {
           }
           if (isInIntro) continue;
 
-          String filename = linkText;
+          String filename = link.text.trim().replaceAll(RegExp(r'\s+'), ' ');
           if (filename.isEmpty || filename.length > 200) {
             final segments = href.split('/');
             filename = Uri.decodeComponent(segments.lastWhere((s) => s.contains('.'), orElse: () => segments.last));
