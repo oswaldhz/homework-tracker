@@ -430,6 +430,14 @@ class MoodleService {
     return match?.group(1);
   }
 
+  void _saveDebugResponse(String body, String label) {
+    try {
+      final path = '${Directory.systemTemp.path}/homework_tracker_${label}_${DateTime.now().millisecondsSinceEpoch}.html';
+      File(path).writeAsStringSync(body);
+      Logger.instance.log('DEBUG: Saved $label response to $path');
+    } catch (_) {}
+  }
+
   Future<void> _checkCourseSubmissionStatus(http.Client client, Map<String, dynamic> course) async {
     try {
       final courseUrl = course['url']?.toString() ?? '';
@@ -1097,22 +1105,24 @@ class MoodleService {
       }
 
       {
-        final form = editDoc.querySelector(
-          'form#mod_assign_submission_form, '
-          'form[action*="savesubmission"], '
-          'form[action*="view.php"]',
-        );
+        // Only target the Moodle assignment submission form by its unique ID
+        final form = editDoc.querySelector('form#mod_assign_submission_form');
         if (form != null) {
-          // Get form's action URL
           final action = form.attributes['action'] ?? '';
           if (action.isNotEmpty) {
-            formActionUrl = action.startsWith('http')
-                ? action
-                : '$_baseUrl${action.startsWith('/') ? '' : '/'}$action';
+            // Resolve relative action URL properly against the edit page URL
+            formActionUrl = Uri.parse(editUrl).resolve(action).toString();
           }
-          await Logger.instance.log('UPLOAD: Found form, action=$action');
+          await Logger.instance.log('UPLOAD: Found form, action=$action, resolved=$formActionUrl');
 
-          // Extract all hidden inputs and relevant fields
+          // First pass: collect checkbox names so we can skip their hidden value=0 companions
+          final checkboxNames = <String>{};
+          for (final cb in form.querySelectorAll('input[type="checkbox"], input[type="radio"]')) {
+            final n = cb.attributes['name'];
+            if (n != null && n.isNotEmpty) checkboxNames.add(n);
+          }
+
+          // Second pass: extract all relevant fields
           final inputs = form.querySelectorAll('input, textarea, select');
           for (final input in inputs) {
             final tag = input.localName;
@@ -1121,25 +1131,22 @@ class MoodleService {
             if (name == null || name.isEmpty) continue;
 
             if (tag == 'input') {
-              if (type == 'submit' || type == 'button') {
-                // Include submit button with its value
-                formFields[name] = input.attributes['value'] ?? submitButtonValue;
-              } else if (type == 'hidden') {
-                // Always include hidden fields
+              if (type == 'hidden') {
+                // Skip hidden inputs that accompany checkboxes (value=0 companions)
+                if (checkboxNames.contains(name)) continue;
                 formFields[name] = input.attributes['value'] ?? '';
               } else if (type == 'checkbox' || type == 'radio') {
-                // Include checkboxes/radios that are checked or are required form elements
                 if (input.attributes.containsKey('checked') ||
                     name == 'submissionstatement' ||
                     name == 'submitforgrading') {
                   formFields[name] = input.attributes['value'] ?? '1';
                 }
+              } else if (type == 'submit' || type == 'button') {
+                formFields[name] = input.attributes['value'] ?? submitButtonValue;
               } else {
-                // text, email, etc.
                 formFields[name] = input.attributes['value'] ?? '';
               }
             } else if (tag == 'textarea') {
-              // Skip textareas (they caused "rejected" errors in v1.0.4)
               continue;
             } else if (tag == 'select') {
               final selectedOption = input.querySelector('option[selected]');
@@ -1149,7 +1156,7 @@ class MoodleService {
             }
           }
         } else {
-          await Logger.instance.log('UPLOAD: WARNING - Could not find edit form in page');
+          await Logger.instance.log('UPLOAD: WARNING - Could not find mod_assign_submission_form');
         }
       }
 
@@ -1217,12 +1224,14 @@ class MoodleService {
         }
 
         if (body.contains('action=editsubmission')) {
+          _saveDebugResponse(body, 'savesubmission_editform');
           return 'Submission form was rejected by Moodle. Please try in your browser.';
         }
 
         if (body.contains('class="notifyproblem"') ||
             body.contains('role="alert"') ||
             body.contains('class="error"')) {
+          _saveDebugResponse(body, 'savesubmission_error');
           return 'Moodle rejected the submission. Please try in your browser.';
         }
 
@@ -1494,9 +1503,7 @@ class MoodleService {
       // Strategy B: Follow the found link to get the confirmation page
       if (removeLinkUrl != null && removeLinkUrl.isNotEmpty && !remoteSuccess) {
         try {
-          final resolvedUrl = removeLinkUrl.startsWith('http')
-              ? removeLinkUrl
-              : '$_baseUrl${removeLinkUrl.startsWith('/') ? '' : '/'}$removeLinkUrl';
+          final resolvedUrl = Uri.parse('$_baseUrl/mod/assign/view.php?id=$cmid').resolve(removeLinkUrl).toString();
           await Logger.instance.log('REMOVE_SUB: Following: $resolvedUrl');
           final confirmResp = await _get(client, resolvedUrl);
           final confirmBody = confirmResp.body;
@@ -1515,14 +1522,11 @@ class MoodleService {
             final confirmDoc = html_parser.parse(confirmBody);
             // Look for any "Yes" / "Confirm" form or button
             final confirmForm = confirmDoc.querySelector(
-              'form[action*="removesubmission"], '
-              'form[action*="view.php"]',
+              'form[action*="removesubmission"]',
             );
             if (confirmForm != null) {
               final formAction = confirmForm.attributes['action'] ?? '';
-              final actionUrl = formAction.startsWith('http')
-                  ? formAction
-                  : '$_baseUrl${formAction.startsWith('/') ? '' : '/'}$formAction';
+              final actionUrl = Uri.parse(resolvedUrl).resolve(formAction).toString();
               final formData = <String, String>{
                 'id': cmid,
                 'action': 'removesubmission',
